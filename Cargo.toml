@@ -1,0 +1,36 @@
+[package]
+name = "gravishot"
+version = "0.1.0"
+authors = ["tomaspecl <tomaspecl@email.cz>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+include_assets = ["bevy_embedded_assets"]
+profiling = ["bevy/trace_chrome"]
+
+# Enable only a small amount of optimization in debug mode
+[profile.dev]
+opt-level = 1
+
+# Enable high optimizations for dependencies (incl. Bevy), but not for our code:
+[profile.dev.package."*"]
+opt-level = 3
+
+#[profile.release]
+#lto = "thin"
+
+#[target.'cfg(debug_assertions)'.dependencies]
+#bevy = { version = "0.7", features = ["dynamic"] }
+
+[dependencies]
+bevy = { version = "0.7" }
+#bevy = { version = "0.7", features = ["dynamic"] }
+heron = { version = "3.0.0", features = ["3d","collision-from-mesh"] }
+#glam = "0.13.1"
+rand = "0.8.4"
+#bevy_rapier3d = { version = "0.12.1", features = ["render"] }
+bevy-inspector-egui = "0.10.0"
+bevy_editor_pls = { git = "https://github.com/jakobhellermann/bevy_editor_pls.git" }
+bevy_embedded_assets = { version = "0.3.0", optional = true }

@@ -1,0 +1,63 @@
+GRAVISHOT
+
+-multiplayer first person shooter
+-in space
+-small asteroids (any mesh should work) - they cause gravity - attract players and bullets/shots
+    -their gravity is unrealisticaly huge when taking into acount their size and mass
+    -they are stationary - they are part of the map
+-players can move in space by walking on asteroids and jumping from one to another
+    -maybe player has "magnetic" boots and sticks to surfaces he walks on
+-when the player shoots then the action-reaction law applies (3rd law of motion) - the player can use this as propulsion and fly in free space
+    -when the player stands on a surface (asteroid) then this effect is (much) smaller
+    -shooting with a high caliber gun (or high fire rate) when in free space can be bad - can easily reach escape velocity of asteroids and never get atracted back to them (eventualy hitting the edge of the map and getting killed by it)
+-player can throw special gravity grenades (as well as the conventional ones), possibly gravity mines
+    -they also cause gravity and can deflect (nearby) bullets/other shots and players
+    -the enemy would have to compensate their shots to counteract the additional gravity
+    -maybe gravity grenades after explosion become stationary (probably causes less chaos)
+        -or they have action-reaction law applied between them and the player (probably a lot of chaos)
+        -or they dont have action-reaction but can be atracted by asteroids
+-bullets are not that fast or gravity has much higher effect on them - such that the gravitational effect (of asteroids) is more visible
+
+anti-cheat ideas
+-client does not know the exact gravity field -> aimbot can not precisely calculate the shot
+    -bad side-effect: the server has to constantly send the coordinates of every shot (or corections) to make it possible to see them
+    -requires that the map is randomly generated or unknown to the players
+-server owners can choose their anticheat technique - banning (name,IP,ID,etc...)
+                                                    - automatic anticheat
+                                                    - their own implementation (they can edit the source code and recompile)
+
+-map can be made,saved,loaded -> comunity maps
+-mods? - anyone can edit source code and recompile
+
+player damage
+-headshot (helmet) - instant kill
+-bodyshot (space suit) - does damage to player + damage to the space suit -> air leaks out -> has to be repaired with a tape or player suffocates
+    -anyone can patch the hole in the space suit
+    -when the hole is on the back then the shot player can not see it and can not repair it -> other player has to path it
+
+infrastructure
+central server - coordinates clients and simulates the world
+clients - they have two components:
+    local server - comunicates with the server (syncs with it) and simulates localy for GUI, also accepts user input from GUI
+    GUI interface - displays information from local server and handles input (forwards it to local server)
+
+run:
+gravishot.exe
+    opens a window with menu: join server, start server
+    join server: enter IP:port -> connects to server and downloads map, assets ...
+        then menu with "choose a name" and spawn, (maybe choose team?)
+    start server: enter port, map file, other config ..., press start
+        -> window changes: join local apppears -> can join the server within the same window (same instance)
+
+gravishot.exe --server --port 1234 --map my_map.map --some_other_config (etc ...)
+    only console appears and server starts with specified options
+
+gravishot.exe --connect 123.100.10.5:1234 --name MyPlayerName (etc ...)
+    connects to specified server and opens game window
+
+
+
+map files:
+rust dynamic library with certain interface (setup_world, update, etc ...)
+a simple one could just load a .gltf file and pass it to the game
+more complex one could handle complex logic, generate the map, special effects etc...
