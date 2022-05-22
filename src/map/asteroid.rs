@@ -9,11 +9,11 @@ use heron::PendingConvexCollision;
 use rand::{thread_rng,Rng};
 
 pub struct AsteroidAssets {
-    gltf: Handle<Gltf>,
-    asteroids: Vec<Asteroid>,
+    pub gltf: Handle<Gltf>,
+    pub asteroids: Vec<Asteroid>,
 }
 
-struct Asteroid {
+pub struct Asteroid {
     mesh: Handle<Mesh>,
     material: Handle<StandardMaterial>,
     //collider:         //TODO: cache the collider too
@@ -129,9 +129,9 @@ pub fn wait_for_load(
     server: Res<AssetServer>,
     handle: Option<Res<AssetsLoading>>,
     a_gltf: Res<Assets<Gltf>>,
-    a_node: Res<Assets<GltfNode>>,
+    //a_node: Res<Assets<GltfNode>>,
     a_mesh: Res<Assets<GltfMesh>>,
-    mut state: ResMut<State<crate::GameState>>,
+    mut state: ResMut<State<crate::gamestate::GameState>>,
 ) {
     use bevy::asset::LoadState;
 
@@ -175,7 +175,7 @@ pub fn wait_for_load(
                     asteroids,
                 });
 
-                state.set(crate::GameState::Running).unwrap();
+                state.set(crate::gamestate::GameState::MainMenu).unwrap();
             },
             LoadState::Failed | LoadState::Unloaded => panic!("Could not load asteroid assets"),
             _ => ()

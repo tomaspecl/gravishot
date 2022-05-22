@@ -12,10 +12,10 @@ pub struct GravityPlugin;
 impl Plugin for GravityPlugin {
     fn build(&self, app: &mut App) {
         app
-            .register_inspectable::<AtractedByGravity>()
-            .register_inspectable::<CreatesGravity>()
-            .add_system(gravity_system)
-            .add_system(marker_system);
+        .register_inspectable::<AtractedByGravity>()
+        .register_inspectable::<CreatesGravity>()
+        .add_system(gravity_system)
+        .add_system(marker_system);
     }
 }
 
