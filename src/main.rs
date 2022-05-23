@@ -29,11 +29,11 @@ fn main() {
         group.add_before::<bevy::asset::AssetPlugin, _>(bevy_embedded_assets::EmbeddedAssetPlugin);
         group
     })
-    .add_plugin(bevy::diagnostic::LogDiagnosticsPlugin {
+    /*.add_plugin(bevy::diagnostic::LogDiagnosticsPlugin {
         wait_duration: std::time::Duration::from_secs(5),
         ..Default::default()
     })
-    .add_plugin(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default())
+    .add_plugin(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default())*/
     .add_plugin(PhysicsPlugin::default())
     .add_plugin(bevy_egui::EguiPlugin)
     //.add_plugin(EditorPlugin)
@@ -43,7 +43,7 @@ fn main() {
     .add_plugin(gamestate::GameStatePlugin)
     .add_plugin(networking::NetworkPlugin)
 
-    .add_state(gamestate::GameState::Loading)
+    //.add_state(gamestate::GameState::Loading)
 
     .run();
 }
@@ -53,6 +53,7 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asteroids: Res<map::asteroid::AsteroidAssets>,
+    map: Res<map::Map>,
 ) {
     commands.spawn_bundle(PointLightBundle {
         transform: Transform::from_xyz(4.0, 8.0, 4.0),
@@ -61,4 +62,6 @@ fn setup(
     });
 
     player::spawn_player(&mut commands, &mut meshes, &mut materials);
+
+    map::load_from_map(commands, map, asteroids)
 }

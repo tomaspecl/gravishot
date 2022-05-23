@@ -1,23 +1,9 @@
 use super::{NetConfig, Connection, Response};
-use crate::gamestate::GameState;
 
 use bevy::prelude::*;
 use carrier_pigeon::{Client, net::Config};
 
 use std::net::ToSocketAddrs;
-
-pub fn register_systems(app: &mut App) {
-    app
-    .add_system_set(
-        SystemSet::on_enter(GameState::Client)
-            .with_system(create_client)
-    )
-    //.add_system(bevy_pigeon::app::client_tick.label(bevy_pigeon::NetLabel))
-    .add_system_set(
-        SystemSet::on_in_stack_update(GameState::Client)
-            .with_system(bevy_pigeon::app::client_tick.label(bevy_pigeon::NetLabel))
-    );
-}
 
 pub fn create_client(
     mut commands: Commands,
@@ -36,4 +22,5 @@ pub fn create_client(
     let (client, response): (Client, Response) = pending_client.block().unwrap();
     info!("{:?}", response);
     commands.insert_resource(client);
+    commands.insert_resource(response.map);
 }

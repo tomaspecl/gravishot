@@ -1,12 +1,16 @@
 use crate::physics::AtractedByGravity;
 
 use bevy::prelude::*;
+use carrier_pigeon::net::CIdSpec;
 use heron::prelude::*;
 
 use bevy::input::{
     keyboard::KeyboardInput,
     mouse::MouseMotion,
 };
+
+use bevy_pigeon::sync::{NetComp, NetEntity, CNetDir, SNetDir};
+use bevy_pigeon::types::NetTransform;
 
 //the player is attracted by gravity to everything, every object has gravity
 //when the player stands on an object he can walk on it
@@ -38,6 +42,8 @@ pub fn spawn_player(
             AtractedByGravity(0.1),
             //PendingConvexCollision::default(),
             GlobalTransform::default(),
+            NetEntity::new(0),
+            NetComp::<Transform, NetTransform>::new(true,CNetDir::To,SNetDir::ToFrom(CIdSpec::None,CIdSpec::All)),
         ))
         
         .with_children(|parent| {

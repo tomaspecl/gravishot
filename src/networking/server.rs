@@ -1,5 +1,4 @@
-use super::{NetConfig, Connection, Response, Disconnect};
-use crate::gamestate::GameState;
+use super::{NetConfig, Connection, Response};
 
 //use crate::patch::system_set::SystemSet;
 
@@ -8,26 +7,12 @@ use carrier_pigeon::{Server, net::Config};
 
 use std::net::ToSocketAddrs;
 
-pub fn register_systems(app: &mut App) {
-    app
-    .add_system_set(
-        SystemSet::on_enter(GameState::Server)
-            .with_system(create_server)
-            .with_system(crate::map::generate_map)
-    )
-    .add_system_set(
-        SystemSet::on_in_stack_update(GameState::Server)    //TODO: does not work, only updates when no other state on the stack
-            .with_system(bevy_pigeon::app::server_tick.label(bevy_pigeon::NetLabel))
-            .with_system(handle_cons.after(bevy_pigeon::NetLabel))
-            //.with_system(|| println!("server2"))
-    );
-}
-
-fn handle_cons(
+pub fn handle_cons(
     server: Option<ResMut<Server>>,
     mut ew_sync_transform: EventWriter<bevy_pigeon::SyncC<Transform>>,
+    map: Res<crate::map::Map>,
 ) {
-    println!("server"); //debug print to know when this system runs
+    //println!("server"); //debug print to know when this system runs
     if let Some(mut server) = server {
         server.handle_disconnects(|cid, status| {
             println!("Connection {cid} disconnected with status: \"{status}\"");
@@ -39,7 +24,9 @@ fn handle_cons(
             // Force a sync of the players so the new player has updated positions.
             ew_sync_transform.send(bevy_pigeon::SyncC::default());
 
-            (true,Response {})
+            (true,Response {
+                map: map.clone(),
+            })
         });
     }
 }

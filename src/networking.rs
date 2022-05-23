@@ -45,7 +45,7 @@ struct Connection {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Response {
-
+    map: crate::map::Map,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

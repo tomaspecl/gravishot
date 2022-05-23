@@ -1,7 +1,10 @@
 pub mod asteroid;
 
 use bevy::prelude::*;
+
+use bevy_pigeon::types::NetTransform;
 use rand::{Rng, thread_rng};
+use serde::{Serialize, Deserialize};
 
 //This file could be made into a separate dynamicaly linked library
 //which would be used as map file. User could choose the library file and 
@@ -13,13 +16,15 @@ use rand::{Rng, thread_rng};
 /// Server generates this on startup or loads it from a file.
 /// Server sends this to client which uses this to load the map.
 /// TODO: more general maps - general meshes and objects
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Map {
     asteroids: Vec<AsteroidInstance>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct AsteroidInstance {
     id: usize,
-    transform: Transform,
+    transform: NetTransform,
 }
 
 pub fn generate_map(
@@ -35,7 +40,7 @@ pub fn generate_map(
             rng.gen_range(-50.0..50.0),
             rng.gen_range(-50.0..50.0),
             rng.gen_range(-50.0..50.0),
-        );
+        ).into();
 
         let id = rng.gen_range(0..assets.asteroids.len());
 
@@ -56,6 +61,6 @@ pub fn load_from_map(   //TODO: add to some post init? on_enter(GameState::Runni
     assets: Res<asteroid::AsteroidAssets>
 ) {
     for asteroid in map.asteroids.iter() {
-        asteroid::spawn_asteroid(asteroid.transform, Some(asteroid.id), &mut commands, &assets);
+        asteroid::spawn_asteroid(asteroid.transform.into(), Some(asteroid.id), &mut commands, &assets);
     }
 }

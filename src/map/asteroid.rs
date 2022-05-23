@@ -3,8 +3,9 @@ use crate::physics::CreatesGravity;
 use bevy::prelude::*;
 use heron::prelude::*;
 
-use bevy::gltf::{Gltf, GltfNode, GltfMesh, GltfPrimitive};
+use bevy::gltf::{Gltf, GltfMesh, GltfPrimitive};
 use heron::PendingConvexCollision;
+use iyes_loopless::prelude::*;
 
 use rand::{thread_rng,Rng};
 
@@ -131,7 +132,6 @@ pub fn wait_for_load(
     a_gltf: Res<Assets<Gltf>>,
     //a_node: Res<Assets<GltfNode>>,
     a_mesh: Res<Assets<GltfMesh>>,
-    mut state: ResMut<State<crate::gamestate::GameState>>,
 ) {
     use bevy::asset::LoadState;
 
@@ -175,7 +175,7 @@ pub fn wait_for_load(
                     asteroids,
                 });
 
-                state.set(crate::gamestate::GameState::MainMenu).unwrap();
+                commands.insert_resource(NextState(crate::gamestate::GameState::MainMenu));
             },
             LoadState::Failed | LoadState::Unloaded => panic!("Could not load asteroid assets"),
             _ => ()
