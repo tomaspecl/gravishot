@@ -1,7 +1,5 @@
 use super::{NetConfig, Connection, Response};
 
-//use crate::patch::system_set::SystemSet;
-
 use bevy::prelude::*;
 use carrier_pigeon::{Server, net::Config};
 
@@ -12,13 +10,12 @@ pub fn handle_cons(
     mut ew_sync_transform: EventWriter<bevy_pigeon::SyncC<Transform>>,
     map: Res<crate::map::Map>,
 ) {
-    //println!("server"); //debug print to know when this system runs
     if let Some(mut server) = server {
-        server.handle_disconnects(|cid, status| {
+        let _disconnected = server.handle_disconnects(|cid, status| {
             println!("Connection {cid} disconnected with status: \"{status}\"");
         });
 
-        server.handle_new_cons(|cid, con: Connection| {
+        let _connected = server.handle_new_cons(|cid, con: Connection| {
             println!("Connection {cid} connected with status: \"{con:?}\"");
 
             // Force a sync of the players so the new player has updated positions.

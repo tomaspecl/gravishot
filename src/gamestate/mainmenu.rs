@@ -12,7 +12,6 @@ pub fn ui(
     mut commands: Commands,
     mut ctx: ResMut<EguiContext>,
     mut net: ResMut<NetConfig>,
-    //mut state: ResMut<State<GameState>>,
 ) {
     let ctx = ctx.ctx_mut();
 

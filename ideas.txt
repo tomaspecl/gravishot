@@ -36,10 +36,11 @@ player damage
     -when the hole is on the back then the shot player can not see it and can not repair it -> other player has to path it
 
 infrastructure
-central server - coordinates clients and simulates the world
-clients - they have two components:
-    local server - comunicates with the server (syncs with it) and simulates localy for GUI, also accepts user input from GUI
-    GUI interface - displays information from local server and handles input (forwards it to local server)
+central server - coordinates clients and simulates the world, checks rules, decides player damage
+clients - they have 3 components:
+    local world - simulates localy for GUI and for minimizing bandwidth
+    Client connection - comunicates with the server (syncs local world with it)
+    GUI interface - displays local world and handles input
 
 run:
 gravishot.exe

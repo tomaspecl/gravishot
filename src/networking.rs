@@ -6,9 +6,9 @@ use bevy_pigeon::{types::NetTransform, AppExt};
 use carrier_pigeon::{MsgTable, Transport, MsgTableParts};
 use serde::{Serialize, Deserialize};
 
-//when in client mode -> GameState::Running, GameState::Client, GameState::InGame
-//when in server mode -> GameState::Running, GameState::Server
-//      when connect localy -> + GameState::InGame, no GameState::Client because it doesnt sync
+//when in client mode -> GameState::Running + Client resource (syncs from server) + display game + handle input
+//when in server mode -> GameState::Running + Server resource (syncs to clients)
+//      when connect localy -> + display game + handle input, no Client resource because it doesnt sync from server (we are the server)
 
 pub struct NetConfig {
     pub ip_port: String,

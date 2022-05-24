@@ -23,47 +23,18 @@ pub enum GameState {
     ServerSetup,
     /// Everything is loaded and simulation is running
     /// This runs both on server and client
+    /// Client uses this to predict movement of objects to reduce trafic
     Running,
 }
 
 //pub enum RunningState {
+      /// Player is alive - display the game and handle user input
 //    Alive,
+      /// Overlay over InGame
 //    PauseMenu,
 //}
 
-//#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-//pub enum GameStateOld {
-//    /// Game setup - loading assets, other stuff needed by both Client and Server ...
-//    /// Switches to MainMenu when completed
-//    Loading,
-//    /// Contains "join server" and "start server"
-//    /// "join server" switches to Client
-//    /// "start server" switches to ServerSetup
-//    MainMenu,
-//    /// Everything is loaded and simulation is running
-//    /// This runs both on server and client
-//    /// Client uses this to predict movement of objects to reduce trafic
-//    Running,
-//
-//    //SERVER SPECIFIC
-//
-//    /// Talks to all connected clients and syncs with them  -> instead run when Server resource exists
-//    Server,
-//
-//    //CLIENT SPECIFIC
-//    /// Talks to the connected server and syncs with it -> instead run when Client resource exists
-//    Client,
-//    /// Runs after Client connects to server (and server instructs client to load map?)
-//    /// and downloads information from the server to create a copy of the map
-//    ClientLoadMap,
-//    /// Displays the game, handles user input - maybe split to InGame and Alive  -> Alive handles player movement?
-//    InGame,
-//    /// Overlay over InGame
-//    PauseMenu,
-//
-//}
-
-/// Registers systems specific to each [`GameState`]
+/// Registers systems specific to each [`GameState`] and other related state
 pub struct GameStatePlugin;
 
 impl Plugin for GameStatePlugin {
@@ -92,27 +63,18 @@ impl Plugin for GameStatePlugin {
             .into()
         )
 
-        //GameState::ClientSetup TODO:
-        .add_enter_system(GameState::ClientSetup,networking::client::create_client)
-        .add_system_set(
-            ConditionSet::new()
-            .run_in_state(GameState::ClientSetup)
-            .with_system(change_state(GameState::Running))
-            .into()
-        )
+        //GameState::ClientSetup
+        .add_enter_system(GameState::ClientSetup,networking::client::create_client.label("ClientSetup1"))
+        .add_enter_system(GameState::ClientSetup,crate::setup.after("ClientSetup1").label("ClientSetup2"))
+        .add_enter_system(GameState::ClientSetup,change_state(GameState::Running).after("ClientSetup2"))
 
         //GameState::ServerSetup
-        .add_enter_system(GameState::ServerSetup,crate::map::generate_map.label("GameState::ServerSetup1"))
-        .add_enter_system(GameState::ServerSetup,networking::server::create_server.after("GameState::ServerSetup1"))
-        .add_system_set(
-            ConditionSet::new()
-            .run_in_state(GameState::ServerSetup)
-            .with_system(change_state(GameState::Running))
-            .into()
-        )
+        .add_enter_system(GameState::ServerSetup,crate::map::generate_map.label("ServerSetup1"))
+        .add_enter_system(GameState::ServerSetup,crate::setup.after("ServerSetup1").label("ServerSetup2"))
+        .add_enter_system(GameState::ServerSetup,networking::server::create_server.label("ServerSetup3"))
+        .add_enter_system(GameState::ServerSetup,change_state(GameState::Running).after("ServerSetup2").after("ServerSetup3"))
 
         //GameState::Running
-        .add_enter_system(GameState::Running,crate::setup)
         .add_system_set(
             ConditionSet::new()
             .run_in_state(GameState::Running)
@@ -121,6 +83,7 @@ impl Plugin for GameStatePlugin {
         )
 
         //when server exists    TODO: move to server.rs ? or networking.rs ?
+        // Talks to all connected clients and syncs with them
         .add_system_set(
             ConditionSet::new()
             .run_if_resource_exists::<carrier_pigeon::Server>()
@@ -130,6 +93,7 @@ impl Plugin for GameStatePlugin {
         )
 
         //when client exists    TODO: move to client.rs ? or networking.rs ?
+        // Talks to the connected server and syncs with it
         .add_system_set(
             ConditionSet::new()
             .run_if_resource_exists::<carrier_pigeon::Client>()

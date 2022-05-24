@@ -1,7 +1,6 @@
 use crate::physics::AtractedByGravity;
 
 use bevy::prelude::*;
-use carrier_pigeon::net::CIdSpec;
 use heron::prelude::*;
 
 use bevy::input::{
@@ -11,6 +10,7 @@ use bevy::input::{
 
 use bevy_pigeon::sync::{NetComp, NetEntity, CNetDir, SNetDir};
 use bevy_pigeon::types::NetTransform;
+use carrier_pigeon::net::CIdSpec;
 
 //the player is attracted by gravity to everything, every object has gravity
 //when the player stands on an object he can walk on it
