@@ -64,15 +64,15 @@ impl Plugin for GameStatePlugin {
         )
 
         //GameState::ClientSetup
-        .add_enter_system(GameState::ClientSetup,networking::client::create_client.label("ClientSetup1"))
-        .add_enter_system(GameState::ClientSetup,crate::setup.after("ClientSetup1").label("ClientSetup2"))
-        .add_enter_system(GameState::ClientSetup,change_state(GameState::Running).after("ClientSetup2"))
+        .add_enter_system(GameState::ClientSetup,networking::client::create_client.label("ClientSetup"))
+        .add_enter_system(GameState::ClientSetup,change_state(GameState::Running).after("ClientSetup"))
+        .add_exit_system(GameState::ClientSetup,crate::setup)
 
         //GameState::ServerSetup
         .add_enter_system(GameState::ServerSetup,crate::map::generate_map.label("ServerSetup1"))
-        .add_enter_system(GameState::ServerSetup,crate::setup.after("ServerSetup1").label("ServerSetup2"))
-        .add_enter_system(GameState::ServerSetup,networking::server::create_server.label("ServerSetup3"))
-        .add_enter_system(GameState::ServerSetup,change_state(GameState::Running).after("ServerSetup2").after("ServerSetup3"))
+        .add_enter_system(GameState::ServerSetup,networking::server::create_server.label("ServerSetup2"))
+        .add_enter_system(GameState::ServerSetup,change_state(GameState::Running).after("ServerSetup1").after("ServerSetup2"))
+        .add_exit_system(GameState::ServerSetup,crate::setup)
 
         //GameState::Running
         .add_system_set(
