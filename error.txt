@@ -1,0 +1,15 @@
+Connection 1 connected with status: "Connection"
+←[2m2022-05-25T16:33:11.381220Z←[0m ←[31mERROR←[0m ←[2mcarrier_pigeon::server←[0
+m←[2m:←[0m TCP(1): IO error occurred while receiving data. The header of a recei
+ved message indicates a size of 43586,but the max allowed message size is 2048.c
+arrier-pigeon never sends a message greater than this; this message was likely n
+ot sent by carrier-pigeon. This will cause issues when trying to read; Discardin
+g this message and closing connection.
+←[2m2022-05-25T16:33:11.382220Z←[0m ←[31mERROR←[0m ←[2mbevy_pigeon::app←[0m←[2m:
+←[0m Software v hostitelském počítači ukončil vytvořené připojení. (os error 100
+53)
+Connection 1 disconnected with status: "Dropped with error The header of a recei
+ved message indicates a size of 43586,but the max allowed message size is 2048.c
+arrier-pigeon never sends a message greater than this; this message was likely n
+ot sent by carrier-pigeon. This will cause issues when trying to read; Discardin
+g this message and closing connection."
