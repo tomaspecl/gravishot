@@ -5,9 +5,6 @@ use bevy::prelude::*;
 use iyes_loopless::prelude::*;
 use bevy_egui::{egui,EguiContext};
 
-#[derive(Component)]
-struct StateHolder(GameState);
-
 pub fn ui(
     mut commands: Commands,
     mut ctx: ResMut<EguiContext>,

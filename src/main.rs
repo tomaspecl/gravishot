@@ -43,6 +43,7 @@ fn main() {
     .add_plugin(gamestate::GameStatePlugin)
     .add_plugin(networking::NetworkPlugin)
 
+    .add_event::<player::SpawnPlayerEvent>()
     //.add_state(gamestate::GameState::Loading)
 
     .run();
@@ -50,8 +51,6 @@ fn main() {
 
 fn setup(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
     asteroids: Res<map::asteroid::AsteroidAssets>,
     map: Res<map::Map>,
 ) {
@@ -60,8 +59,6 @@ fn setup(
         point_light: PointLight::default(),
         ..Default::default()
     });
-
-    player::spawn_player(&mut commands, &mut meshes, &mut materials);
 
     map::load_from_map(commands, map, asteroids)
 }

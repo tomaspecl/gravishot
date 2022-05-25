@@ -3,6 +3,7 @@ pub mod asteroid;
 use bevy::prelude::*;
 
 use bevy_pigeon::types::NetTransform;
+
 use rand::{Rng, thread_rng};
 use serde::{Serialize, Deserialize};
 

@@ -1,4 +1,5 @@
 mod mainmenu;
+mod spawn_menu;
 
 use crate::{map::asteroid, player, networking};
 
@@ -79,6 +80,14 @@ impl Plugin for GameStatePlugin {
             ConditionSet::new()
             .run_in_state(GameState::Running)
             .with_system(player::movement_system)
+            .with_system(player::spawn_player_event_handler)
+            .into()
+        )
+        .add_system_set(
+            ConditionSet::new()
+            .run_in_state(GameState::Running)
+            .run_if_not(player::local_player_exists)
+            .with_system(spawn_menu::ui)
             .into()
         )
 
@@ -89,6 +98,8 @@ impl Plugin for GameStatePlugin {
             .run_if_resource_exists::<carrier_pigeon::Server>()
             .with_system(bevy_pigeon::app::server_tick/*.label(bevy_pigeon::NetLabel)*/)
             .with_system(networking::server::handle_cons/*.after(bevy_pigeon::NetLabel)*/)
+            .with_system(networking::server::send_player_spawns)
+            .with_system(networking::server::handle_player_spawn_requests)
             .into()
         )
 
@@ -98,6 +109,7 @@ impl Plugin for GameStatePlugin {
             ConditionSet::new()
             .run_if_resource_exists::<carrier_pigeon::Client>()
             .with_system(bevy_pigeon::app::client_tick/*.label(bevy_pigeon::NetLabel)*/)
+            .with_system(networking::client::receive_player_spawns)
             .into()
         );
     }
