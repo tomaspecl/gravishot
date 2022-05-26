@@ -36,6 +36,7 @@ fn make_msg_table(app: &mut App) -> MsgTableParts {
 
     table.register::<RequestPlayer>(Transport::TCP).unwrap();
     table.register::<SpawnPlayer>(Transport::TCP).unwrap();
+    table.register::<DespawnPlayer>(Transport::TCP).unwrap();
 
     app.sync_comp::<Transform, NetTransform>(&mut table, Transport::TCP);
 
@@ -82,6 +83,9 @@ impl From<crate::player::SpawnPlayerEvent> for SpawnPlayer {
         }
     }
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct DespawnPlayer(CId);
 
 /// Every entity with NetEntity component will contain this.
 /// Networking code can then use Query<(&NetEntity,&NetMarker)> to get list of all NetEntities

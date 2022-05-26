@@ -115,6 +115,22 @@ pub fn spawn_player_event_handler(
     }
 }
 
+pub struct DespawnPlayerEvent(pub CId);
+
+pub fn despawn_player_event_handler(
+    mut event: EventReader<DespawnPlayerEvent>,
+    mut commands: Commands,
+    players: Query<(Entity,&Player)>,
+) {
+    for event in event.iter() {
+        for (entity,player) in players.iter() {
+            if player.cid==event.0 {
+                commands.entity(entity).despawn_recursive();
+            }
+        }
+    }
+}
+
 pub fn movement_system(
     mut query: Query<(&mut Transform, &mut Velocity), With<LocalPlayer>>,
     mut keyboard: EventReader<KeyboardInput>,

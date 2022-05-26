@@ -81,6 +81,7 @@ impl Plugin for GameStatePlugin {
             .run_in_state(GameState::Running)
             .with_system(player::movement_system)
             .with_system(player::spawn_player_event_handler)
+            .with_system(player::despawn_player_event_handler)
             .into()
         )
         .add_system_set(
@@ -110,6 +111,7 @@ impl Plugin for GameStatePlugin {
             .run_if_resource_exists::<carrier_pigeon::Client>()
             .with_system(bevy_pigeon::app::client_tick/*.label(bevy_pigeon::NetLabel)*/)
             .with_system(networking::client::receive_player_spawns)
+            .with_system(networking::client::receive_player_despawns)
             .into()
         );
     }

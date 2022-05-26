@@ -17,23 +17,37 @@ impl NetEntityIdCounter {
 }
 
 pub fn handle_cons(
+    mut commands: Commands,
     mut server: ResMut<Server>,
     mut ew_sync_transform: EventWriter<bevy_pigeon::SyncC<Transform>>,
     net_entities: Query<(Entity,&NetEntity,&NetMarker)>,
     transforms: Query<&Transform>,
-    players: Query<&crate::player::Player>,
+    players: Query<(Entity,&crate::player::Player)>,
     map: Res<crate::map::Map>,
+    mut player_despawn_events: EventWriter<crate::player::DespawnPlayerEvent>,
 ) {
-    let _disconnected = server.handle_disconnects(|cid, status| {
+    let mut disconnected = Vec::new();
+
+    server.handle_disconnects(|cid, status| {
         println!("Connection {cid} disconnected with status: \"{status}\"");
+
+        players.iter().filter(|(_entity,player)| player.cid==cid).for_each(|(entity,_player)| {
+            commands.entity(entity).despawn_recursive();
+            player_despawn_events.send(crate::player::DespawnPlayerEvent(cid));
+            disconnected.push(cid);
+        });
     });
 
-    let mut new_clients = Vec::new();
+    for cid in disconnected {
+        server.broadcast(&super::DespawnPlayer(cid)).unwrap();
+    }
 
-    let _connected = server.handle_new_cons(|cid, con: Connection| {
+    let mut connected = Vec::new();
+
+    server.handle_new_cons(|cid, con: Connection| {
         println!("Connection {cid} connected with status: \"{con:?}\"");
 
-        new_clients.push(cid);
+        connected.push(cid);
 
         // Force a sync of the players so the new player has updated positions.
         ew_sync_transform.send(bevy_pigeon::SyncC::default());
@@ -49,11 +63,11 @@ pub fn handle_cons(
         match marker {
             NetMarker::Player => {
                 let msg = super::SpawnPlayer {
-                    cid: players.get(entity).unwrap().cid,
+                    cid: players.get(entity).unwrap().1.cid,
                     nid: nid.id,
                     transform: transforms.get(entity).unwrap().clone().into(),
                 };
-                for &client in &new_clients {
+                for &client in &connected {
                     server.send_to(client, &msg).unwrap();
                 }
             },

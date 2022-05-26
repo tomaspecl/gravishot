@@ -44,6 +44,7 @@ fn main() {
     .add_plugin(networking::NetworkPlugin)
 
     .add_event::<player::SpawnPlayerEvent>()
+    .add_event::<player::DespawnPlayerEvent>()
     //.add_state(gamestate::GameState::Loading)
 
     .run();

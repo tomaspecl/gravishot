@@ -12,6 +12,13 @@ pub fn receive_player_spawns(
     event.send_batch(client.recv::<super::SpawnPlayer>().map(|m| m.m.clone().into()));
 }
 
+pub fn receive_player_despawns(
+    client: ResMut<Client>,
+    mut event: EventWriter<crate::player::DespawnPlayerEvent>,
+) {
+    event.send_batch(client.recv::<super::DespawnPlayer>().map(|m| crate::player::DespawnPlayerEvent(m.m.0)));
+}
+
 pub fn create_client(
     mut commands: Commands,
     mut myconfig: ResMut<NetConfig>,
