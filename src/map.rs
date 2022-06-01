@@ -56,7 +56,7 @@ pub fn generate_map(
     });
 }
 
-pub fn load_from_map(   //TODO: add to some post init? on_enter(GameState::Running)?
+pub fn load_from_map(
     mut commands: Commands,
     map: Res<Map>,
     assets: Res<asteroid::AsteroidAssets>
