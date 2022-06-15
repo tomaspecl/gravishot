@@ -1,7 +1,7 @@
 use crate::physics::AtractedByGravity;
 
 use bevy::prelude::*;
-use heron::prelude::*;
+use bevy_rapier3d::prelude::*;
 
 use bevy::input::{
     keyboard::KeyboardInput,
@@ -65,15 +65,16 @@ pub fn spawn_player_event_handler(
             },
             transform,
             RigidBody::Dynamic,
+            Collider::capsule_y((height-2.0*radius)/2.0, radius),
             Velocity::default(),
-            Damping::from_angular(1.0),
-            PhysicMaterial {
-                restitution: 0.7,
-                density: 1.0,
-                friction: 0.1,
+            Damping {
+                linear_damping: 0.0,
+                angular_damping: 1.0,
             },
+            Restitution::coefficient(0.7),
+            Friction::coefficient(0.1),
+            ColliderMassProperties::Density(1.0),
             AtractedByGravity(0.1),
-            //PendingConvexCollision::default(),
             GlobalTransform::default(),
             NetEntity::new(nid),
             crate::networking::NetMarker::Player,
@@ -109,8 +110,7 @@ pub fn spawn_player_event_handler(
                 material: materials.add(Color::rgb(0.8, 0.7, 0.6).into()),
                 transform: Transform::from_xyz(0.0, 0.0, 0.0),
                 ..Default::default()
-            })
-            .insert(CollisionShape::Capsule { half_segment: (height-2.0*radius)/2.0, radius });
+            });
         });
     }
 }
@@ -170,7 +170,7 @@ pub fn movement_system(
         let translation_coefficient = 0.1;
         let rotation_coefficient = 0.1;
     
-        velocity.linear += (rot * t) * translation_coefficient;
+        velocity.linvel += (rot * t) * translation_coefficient;
         let rot = r * rotation_coefficient;
     
         transform.rotation *= Quat::from_euler(EulerRot::YXZ,rot.x,rot.y,rot.z);

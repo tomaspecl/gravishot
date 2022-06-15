@@ -1,10 +1,9 @@
 use crate::physics::CreatesGravity;
 
 use bevy::prelude::*;
-use heron::prelude::*;
+use bevy_rapier3d::prelude::*;
 
 use bevy::gltf::{Gltf, GltfMesh, GltfPrimitive};
-use heron::PendingConvexCollision;
 use iyes_loopless::prelude::*;
 
 use rand::{thread_rng,Rng};
@@ -17,7 +16,7 @@ pub struct AsteroidAssets {
 pub struct Asteroid {
     mesh: Handle<Mesh>,
     material: Handle<StandardMaterial>,
-    //collider:         //TODO: cache the collider too
+    collider: Collider,
 }
 
 pub fn spawn_asteroid(
@@ -26,11 +25,6 @@ pub fn spawn_asteroid(
     commands: &mut Commands,
     asteroids: &Res<AsteroidAssets>,
 ) {
-    //implement this https://github.com/jcornaz/heron/pull/121
-    //into https://github.com/jcornaz/heron/blob/main/core/src/collision_from_mesh.rs
-    //let collider_builder = heron::rapier_plugin::rapier3d::geometry::ColliderBuilder::convex_decomposition(vertices, indices);
-    //heron::CollisionShape::Custom { shape: () };
-
     let mut rng = thread_rng();
     let asteroids = &asteroids.asteroids;
     let l = asteroids.len();
@@ -40,9 +34,11 @@ pub fn spawn_asteroid(
     let mesh = a.mesh.clone();
     let material = a.material.clone();
 
+    let collider = a.collider.clone();
+
     commands.spawn_bundle((
         RigidBody::KinematicPositionBased,
-        PendingConvexCollision::default(),  //TODO: this does not make exact collision shape but only convex hull around it
+        collider,
         CreatesGravity(1.0),
         transform,
         GlobalTransform::default(),
@@ -131,7 +127,8 @@ pub fn wait_for_load(
     handle: Option<Res<AssetsLoading>>,
     a_gltf: Res<Assets<Gltf>>,
     //a_node: Res<Assets<GltfNode>>,
-    a_mesh: Res<Assets<GltfMesh>>,
+    a_gmesh: Res<Assets<GltfMesh>>,
+    a_mesh: Res<Assets<Mesh>>,
 ) {
     use bevy::asset::LoadState;
 
@@ -158,14 +155,24 @@ pub fn wait_for_load(
 
                 let mut asteroids = vec![];
 
+                let collider_shape = ComputedColliderShape::ConvexDecomposition(VHACDParameters {
+                    //resolution: 128,
+                    max_convex_hulls: 16384,
+                    ..default()
+                });
+
                 for mesh in gltf.meshes.iter() {
-                    let mesh = a_mesh.get(mesh).unwrap();
+                    let mesh = a_gmesh.get(mesh).unwrap();
                     for GltfPrimitive {mesh,material} in &mesh.primitives {
-                        let mesh = mesh.clone();
+                        println!("loading asteroid");
+                        let mesh_handle = mesh.clone();
+                        let mesh = a_mesh.get(mesh_handle.clone()).unwrap();
                         let material = material.clone().unwrap_or_default();
+                        let collider = Collider::from_bevy_mesh(mesh,&collider_shape).unwrap();
                         asteroids.push(Asteroid {
-                            mesh,
+                            mesh: mesh_handle,
                             material,
+                            collider,
                         });
                     }
                 }
