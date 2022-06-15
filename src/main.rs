@@ -5,7 +5,7 @@ mod networking;
 mod map;
 
 use bevy::prelude::*;
-use heron::prelude::*;
+use bevy_rapier3d::prelude::*;
 
 fn main() {
     App::new()
@@ -34,9 +34,13 @@ fn main() {
         ..Default::default()
     })
     .add_plugin(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default())*/
-    .add_plugin(PhysicsPlugin::default())
+    .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
     .add_plugin(bevy_egui::EguiPlugin)
     //.add_plugin(EditorPlugin)
+
+    .add_plugin(RapierDebugRenderPlugin::default())
+
+    //.add_plugin(bevy_inspector_egui_rapier::InspectableRapierPlugin)
     .add_plugin(bevy_inspector_egui::WorldInspectorPlugin::default())
 
     .add_plugin(physics::GravityPlugin)
