@@ -25,11 +25,6 @@ pub fn spawn_asteroid(
     commands: &mut Commands,
     asteroids: &Res<AsteroidAssets>,
 ) {
-    //implement this https://github.com/jcornaz/heron/pull/121
-    //into https://github.com/jcornaz/heron/blob/main/core/src/collision_from_mesh.rs
-    //let collider_builder = heron::rapier_plugin::rapier3d::geometry::ColliderBuilder::convex_decomposition(vertices, indices);
-    //heron::CollisionShape::Custom { shape: () };
-
     let mut rng = thread_rng();
     let asteroids = &asteroids.asteroids;
     let l = asteroids.len();
