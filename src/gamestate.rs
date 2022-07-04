@@ -82,6 +82,8 @@ impl Plugin for GameStatePlugin {
             .with_system(player::movement_system)
             .with_system(player::spawn_player_event_handler)
             .with_system(player::despawn_player_event_handler)
+            .with_system(player::display_events)
+            .with_system(player::stand_up)
             .into()
         )
         .add_system_set(

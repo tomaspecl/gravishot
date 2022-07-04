@@ -1,17 +1,27 @@
-use crate::physics::AtractedByGravity;
+use crate::physics::{AtractedByGravity, GravityVector};
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
-use bevy::input::{
-    keyboard::KeyboardInput,
-    mouse::MouseMotion,
-};
+use bevy::input::mouse::MouseMotion;
 
 use bevy_pigeon::sync::{NetComp, NetEntity, CNetDir, SNetDir};
 use bevy_pigeon::types::NetTransform;
 use carrier_pigeon::CId;
 use carrier_pigeon::net::CIdSpec;
+use bevy_inspector_egui::Inspectable;
+use bevy_inspector_egui::RegisterInspectable;
+
+pub struct PlayerPlugin;
+
+impl Plugin for PlayerPlugin {
+    fn build(&self, app: &mut App) {
+        app
+        .add_event::<SpawnPlayerEvent>()
+        .add_event::<DespawnPlayerEvent>()
+        .register_inspectable::<Standing>();
+    }
+}
 
 //the player is attracted by gravity to everything, every object has gravity
 //when the player stands on an object he can walk on it
@@ -25,6 +35,9 @@ pub struct Player {
 
 #[derive(Component)]
 pub struct LocalPlayer;
+
+#[derive(Component,Inspectable)]
+pub struct Standing(pub bool);
 
 #[derive(Clone)]
 pub struct SpawnPlayerEvent {
@@ -65,16 +78,16 @@ pub fn spawn_player_event_handler(
             },
             transform,
             RigidBody::Dynamic,
-            Collider::capsule_y((height-2.0*radius)/2.0, radius),
             Velocity::default(),
+            ExternalForce::default(),
+            ExternalImpulse::default(),
             Damping {
                 linear_damping: 0.0,
                 angular_damping: 1.0,
             },
-            Restitution::coefficient(0.7),
-            Friction::coefficient(0.1),
-            ColliderMassProperties::Density(1.0),
             AtractedByGravity(0.1),
+            GravityVector(Vec3::ZERO),
+            Standing(false),
             GlobalTransform::default(),
             NetEntity::new(nid),
             crate::networking::NetMarker::Player,
@@ -111,7 +124,62 @@ pub fn spawn_player_event_handler(
                 transform: Transform::from_xyz(0.0, 0.0, 0.0),
                 ..Default::default()
             });
+
+            parent.spawn_bundle((
+                Collider::capsule_y((height-2.0*radius)/2.0, radius),
+                Restitution::coefficient(0.7),
+                Friction::coefficient(0.1),
+                ColliderMassProperties::Density(1.0),
+            ));
+
+            let scale = 4.0;
+            parent.spawn_bundle((
+                Collider::capsule_y((height-2.0*radius)/2.0*scale, radius*scale),
+                Sensor(true),
+                ActiveEvents::COLLISION_EVENTS,
+            ));
         });
+    }
+}
+
+pub fn stand_up(
+    mut local_player: Query<(&Standing,&Transform,&GravityVector,&mut ExternalForce),With<LocalPlayer>>,
+) {
+    for (standing,transform,vector,mut force) in local_player.iter_mut() {
+        if standing.0 {
+            let torque = vector.0.normalize().cross(transform.up());
+            force.torque = torque * 10.0;
+        }
+    }
+}
+
+pub fn display_events(
+    mut collision_events: EventReader<CollisionEvent>,
+    context: Res<RapierContext>,
+    colliders: Query<&Parent,(With<Collider>,With<Sensor>)>,
+    mut players: Query<&mut Standing,With<LocalPlayer>>,
+) {
+    for collision_event in collision_events.iter() {
+        println!("Received collision event: {:?}", collision_event);
+
+        let (e1,e2,_flags) = match collision_event {
+            CollisionEvent::Started(e1,e2,f) => (e1,e2,f),
+            CollisionEvent::Stopped(e1,e2,f) => (e1,e2,f),
+        };
+
+        let (player,collider) = if let Ok(x) = colliders.get(*e1) {
+            (x.0,*e1)
+        }else if let Ok(x) = colliders.get(*e2) {
+            (x.0,*e2)
+        }else{ continue };
+
+        let interactions: Vec<_> = context.intersections_with(collider).collect();
+        println!("{:?}",interactions);
+        if interactions.iter().any(|(_e1,_e2,touches)| *touches) {
+            players.get_mut(player).unwrap().0 = true;
+        }else{
+            players.get_mut(player).unwrap().0 = false;
+        }
     }
 }
 
@@ -133,39 +201,39 @@ pub fn despawn_player_event_handler(
 
 pub fn movement_system(
     mut query: Query<(&mut Transform, &mut Velocity), With<LocalPlayer>>,
-    mut keyboard: EventReader<KeyboardInput>,
+    keyboard: Res<Input<KeyCode>>,
     mut mouse: EventReader<MouseMotion>,
     mouse_button: Res<Input<MouseButton>>,
 ) {
+    let mut t = Vec3::ZERO;
+    let mut r = Vec3::ZERO;
+
+    for key in keyboard.get_pressed() {
+        t += match key {
+            KeyCode::W => -Vec3::Z,
+            KeyCode::S => Vec3::Z,
+            KeyCode::A => -Vec3::X,
+            KeyCode::D => Vec3::X,
+            KeyCode::Space => Vec3::Y,
+            KeyCode::LShift => -Vec3::Y,
+            _ => Vec3::ZERO,
+        };
+
+        r += match key {
+            KeyCode::Q => Vec3::Z,
+            KeyCode::E => -Vec3::Z,
+            _ => Vec3::ZERO,
+        };
+    }
+
+    if mouse_button.pressed(MouseButton::Left) {
+        for mouse_motion in mouse.iter() {
+            r += Vec3::new(mouse_motion.delta.x,mouse_motion.delta.y,0.0) * -0.1
+        }
+    }
+
     for (mut transform, mut velocity) in query.iter_mut() {
         let rot = transform.rotation;
-
-        let mut t = Vec3::ZERO;
-        let mut r = Vec3::ZERO;
-    
-        for key in keyboard.iter() {
-            t += match key.key_code {
-                Some(KeyCode::W) => -Vec3::Z,
-                Some(KeyCode::S) => Vec3::Z,
-                Some(KeyCode::A) => -Vec3::X,
-                Some(KeyCode::D) => Vec3::X,
-                Some(KeyCode::Space) => Vec3::Y,
-                Some(KeyCode::LShift) => -Vec3::Y,
-                _ => Vec3::ZERO,
-            };
-    
-            r += match key.key_code {
-                Some(KeyCode::Q) => Vec3::Z,
-                Some(KeyCode::E) => -Vec3::Z,
-                _ => Vec3::ZERO,
-            };
-        }
-    
-        if mouse_button.pressed(MouseButton::Left) {
-            for mouse_motion in mouse.iter() {
-                r += Vec3::new(mouse_motion.delta.x,mouse_motion.delta.y,0.0) * -0.1
-            }
-        }
     
         let translation_coefficient = 0.1;
         let rotation_coefficient = 0.1;

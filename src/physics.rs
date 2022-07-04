@@ -15,6 +15,8 @@ impl Plugin for GravityPlugin {
         })
         .register_inspectable::<AtractedByGravity>()
         .register_inspectable::<CreatesGravity>()
+        .register_inspectable::<GravityVector>()
+        .add_system_to_stage(CoreStage::PreUpdate,force_reset)
         .add_system(gravity_system)
         .add_system(marker_system);
     }
@@ -27,13 +29,16 @@ pub struct AtractedByGravity(pub f32);
 #[derive(Component,Inspectable,Clone)]
 pub struct CreatesGravity(pub f32);
 
+#[derive(Component,Inspectable,Clone)]
+pub struct GravityVector(pub Vec3);
+
 fn gravity_system(
-    mut affected: Query<(&RapierRigidBodyHandle,&mut Velocity,&AtractedByGravity)>,
+    mut affected: Query<(&RapierRigidBodyHandle,&mut ExternalForce,Option<&mut GravityVector>,&AtractedByGravity)>,
     sources: Query<(&RapierRigidBodyHandle,&CreatesGravity)>,
-    mut context: ResMut<RapierContext>,
+    context: Res<RapierContext>,
 ) {
-    let bodies = &mut context.bodies;
-    for (h1,mut v1,g1) in affected.iter_mut() {
+    let bodies = &context.bodies;
+    for (h1,mut force1,vector,g1) in affected.iter_mut() {
         let mut g = Vec3::ZERO;
         let b1 = bodies.get(h1.0).unwrap();
         for (h2,g2) in sources.iter() {
@@ -47,7 +52,21 @@ fn gravity_system(
             }
         }
 
-        v1.linvel += g*g1.0 / 60.0;
+        g *= g1.0 * b1.mass();
+
+        force1.force += g;
+
+        if let Some(mut vector) = vector {
+            vector.0 = g;
+        }
+    }
+}
+
+fn force_reset(
+    mut forces: Query<&mut ExternalForce>,
+) {
+    for mut force in forces.iter_mut() {
+        *force = ExternalForce::default();
     }
 }
 

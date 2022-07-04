@@ -41,7 +41,7 @@ pub fn generate_map(
             rng.gen_range(-50.0..50.0),
             rng.gen_range(-50.0..50.0),
             rng.gen_range(-50.0..50.0),
-        ).into();
+        ).with_scale(Vec3::splat(5.0)).into();
 
         let id = rng.gen_range(0..assets.asteroids.len());
 

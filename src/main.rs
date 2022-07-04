@@ -43,13 +43,13 @@ fn main() {
     //.add_plugin(bevy_inspector_egui_rapier::InspectableRapierPlugin)
     .add_plugin(bevy_inspector_egui::WorldInspectorPlugin::default())
 
+    .add_plugin(player::PlayerPlugin)
     .add_plugin(physics::GravityPlugin)
     .add_plugin(gamestate::GameStatePlugin)
     .add_plugin(networking::NetworkPlugin)
-
-    .add_event::<player::SpawnPlayerEvent>()
-    .add_event::<player::DespawnPlayerEvent>()
+    
     //.add_state(gamestate::GameState::Loading)
+    .add_system(bevy::input::system::exit_on_esc_system)
 
     .run();
 }
@@ -65,5 +65,5 @@ fn setup(
         ..Default::default()
     });
 
-    map::load_from_map(commands, map, asteroids)
+    map::load_from_map(commands, map, asteroids);
 }
