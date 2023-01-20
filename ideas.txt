@@ -62,3 +62,16 @@ map files:
 rust dynamic library with certain interface (setup_world, update, etc ...)
 a simple one could just load a .gltf file and pass it to the game
 more complex one could handle complex logic, generate the map, special effects etc...
+
+
+relativity and time dilation (optional config):
+gravity (potentialy also fast speeds - lower max speed of light) causes time dilation, affects their ticking (reload speed, health regen speed, movement?,...)
+every player has its time speed, player can see their clock on the screen,
+global time speed exists, is adjusted such that the player with the smallest and largest time dilation have average effects, the player with the average dilation will see their clock to tick the normal speed (1 tick/s)
+global time speed is applied to every object and process
+player with the biggest time dilation sees their clock to tick the slowest, if the player goes further into stronger field then it will slow down more and eventualy the player will "freeze" in time (and "die") as the universe around them speeds up infinitely (only in an animation, no user controls and movement at this stage)
+when the player is getting slower then controlls are getting less sensitive (slower mouse aiming) and all player ticks are slowed (reload time, shooting speed)
+player with the smallest time dilation sees their clock to tick the fastest, if they get even smaller time dilation then will speed up even more and when they get over threshold they will "die" as the universe around them slows down to a stop
+when the player is getting faster then controlls are getting more sensitive (its harder to aim precisely bacause of it) and it gets harder to move as the player wishes
+time dilation boundaries are used such that the players can not get too far apart in the time dilation sense, its not good when one player is too fast and the other too slow, they will have to move "together" in the time dilation way
+-the map can maybe have black hole in the center and the asteroids orbiting around, the black hole causes huge gravity and time dilation
