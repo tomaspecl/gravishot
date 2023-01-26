@@ -8,6 +8,7 @@ use iyes_loopless::prelude::*;
 
 use rand::{thread_rng,Rng};
 
+#[derive(Resource)]
 pub struct AsteroidAssets {
     pub gltf: Handle<Gltf>,
     pub asteroids: Vec<Asteroid>,
@@ -36,15 +37,16 @@ pub fn spawn_asteroid(
 
     let collider = a.collider.clone();
 
-    commands.spawn_bundle((
+    commands.spawn((
         RigidBody::KinematicPositionBased,
         collider,
         CreatesGravity(1.0),
         transform,
         GlobalTransform::default(),
+        ComputedVisibility::default(),
     ))
     .with_children(|p|{
-        p.spawn_bundle(PbrBundle {
+        p.spawn(PbrBundle {
             mesh,
             material,
             ..Default::default()
@@ -53,7 +55,7 @@ pub fn spawn_asteroid(
 
     /*let scene = server.load("asteroid test.gltf#Scene0");
     commands
-        .spawn_bundle((
+        .spawn((
             RigidBody::KinematicPositionBased,
             PendingConvexCollision::default(),
             CreatesGravity(1.0),
@@ -111,6 +113,7 @@ pub fn spawn_asteroid(
         });*/
 }
 
+#[derive(Resource)]
 pub struct AssetsLoading(Handle<Gltf>);
 
 pub fn start_loading(
@@ -166,7 +169,7 @@ pub fn wait_for_load(
                     for GltfPrimitive {mesh,material} in &mesh.primitives {
                         println!("loading asteroid");
                         let mesh_handle = mesh.clone();
-                        let mesh = a_mesh.get(mesh_handle.clone()).unwrap();
+                        let mesh = a_mesh.get(&mesh_handle).unwrap();
                         let material = material.clone().unwrap_or_default();
                         let collider = Collider::from_bevy_mesh(mesh,&collider_shape).unwrap();
                         asteroids.push(Asteroid {

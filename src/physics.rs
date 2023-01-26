@@ -1,9 +1,6 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
-use bevy_inspector_egui::Inspectable;
-use bevy_inspector_egui::RegisterInspectable;
-
 pub struct GravityPlugin;
 
 impl Plugin for GravityPlugin {
@@ -13,9 +10,9 @@ impl Plugin for GravityPlugin {
             gravity: Vect::ZERO,
             ..default()
         })
-        .register_inspectable::<AtractedByGravity>()
-        .register_inspectable::<CreatesGravity>()
-        .register_inspectable::<GravityVector>()
+        .register_type::<AtractedByGravity>()
+        .register_type::<CreatesGravity>()
+        .register_type::<GravityVector>()
         .add_system_to_stage(CoreStage::PreUpdate,force_reset)
         .add_system(gravity_system)
         .add_system(marker_system);
@@ -23,13 +20,13 @@ impl Plugin for GravityPlugin {
 }
 
 //TODO: use sparse set
-#[derive(Component,Inspectable,Clone)]
+#[derive(Component,Reflect,Clone)]
 pub struct AtractedByGravity(pub f32);
 
-#[derive(Component,Inspectable,Clone)]
+#[derive(Component,Reflect,Clone)]
 pub struct CreatesGravity(pub f32);
 
-#[derive(Component,Inspectable,Clone)]
+#[derive(Component,Reflect,Clone)]
 pub struct GravityVector(pub Vec3);
 
 fn gravity_system(
@@ -43,8 +40,8 @@ fn gravity_system(
         let b1 = bodies.get(h1.0).unwrap();
         for (h2,g2) in sources.iter() {
             let b2 = bodies.get(h2.0).unwrap();
-            let position1 = b1.mass_properties().world_com(b1.position());
-            let position2 = b2.mass_properties().world_com(b2.position());
+            let position1 = b1.mass_properties().world_com;
+            let position2 = b2.mass_properties().world_com;
 
             let r_sq = (position1-position2).magnitude_squared();
             if r_sq != 0.0 {

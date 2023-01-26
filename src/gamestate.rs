@@ -9,7 +9,7 @@ use iyes_loopless::prelude::*;
 //new idea for representing game state:
 //multiple levels of state: 1. level is GameState, other levels define other state when in certain GameState
 //example: RunningState - used when in GameState::Running
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Resource, Debug, Clone, Eq, PartialEq, Hash)]
 pub enum GameState {
     /// Game setup - loading assets, other stuff needed by both Client and Server ...
     /// Switches to MainMenu when completed

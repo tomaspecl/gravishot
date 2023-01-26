@@ -9,8 +9,6 @@ use bevy_pigeon::sync::{NetComp, NetEntity, CNetDir, SNetDir};
 use bevy_pigeon::types::NetTransform;
 use carrier_pigeon::CId;
 use carrier_pigeon::net::CIdSpec;
-use bevy_inspector_egui::Inspectable;
-use bevy_inspector_egui::RegisterInspectable;
 
 pub struct PlayerPlugin;
 
@@ -19,7 +17,7 @@ impl Plugin for PlayerPlugin {
         app
         .add_event::<SpawnPlayerEvent>()
         .add_event::<DespawnPlayerEvent>()
-        .register_inspectable::<Standing>();
+        .register_type::<Standing>();
     }
 }
 
@@ -36,7 +34,7 @@ pub struct Player {
 #[derive(Component)]
 pub struct LocalPlayer;
 
-#[derive(Component,Inspectable)]
+#[derive(Component,Reflect)]
 pub struct Standing(pub bool);
 
 #[derive(Clone)]
@@ -72,7 +70,7 @@ pub fn spawn_player_event_handler(
         let height = 0.5;
         let radius = 0.125;
         let mut player = commands
-        .spawn_bundle((
+        .spawn((
             Player {
                 cid,
             },
@@ -89,12 +87,13 @@ pub fn spawn_player_event_handler(
             GravityVector(Vec3::ZERO),
             Standing(false),
             GlobalTransform::default(),
+            ComputedVisibility::default(),
             NetEntity::new(nid),
             crate::networking::NetMarker::Player,
         ));
         
         if cid==local_player {
-            player.insert_bundle((
+            player.insert((
                 LocalPlayer,
                 NetComp::<Transform, NetTransform>::new(true,
                     CNetDir::To,
@@ -103,10 +102,10 @@ pub fn spawn_player_event_handler(
             ));
 
             player.with_children(|parent| {
-                let mut camera = PerspectiveCameraBundle::new_3d();
+                let mut camera = Camera3dBundle::default();
                 //let mut camera = OrthographicCameraBundle::new_3d();
                 camera.transform = Transform::from_xyz(0.0,1.0,0.7).mul_transform(Transform::from_rotation(Quat::from_rotation_x(-0.7)));
-                parent.spawn_bundle(camera);
+                parent.spawn(camera);
             });
         }else{
             player.insert(NetComp::<Transform, NetTransform>::new(true,CNetDir::From,SNetDir::ToFrom(CIdSpec::Except(cid),CIdSpec::Only(cid))));
@@ -114,7 +113,7 @@ pub fn spawn_player_event_handler(
         
         player
         .with_children(|parent| {
-            parent.spawn_bundle(PbrBundle {
+            parent.spawn(PbrBundle {
                 mesh: meshes.add(Mesh::from(bevy::prelude::shape::Capsule {
                     radius,
                     depth: height-2.0*radius,
@@ -125,7 +124,7 @@ pub fn spawn_player_event_handler(
                 ..Default::default()
             });
 
-            parent.spawn_bundle((
+            parent.spawn((
                 Collider::capsule_y((height-2.0*radius)/2.0, radius),
                 Restitution::coefficient(0.7),
                 Friction::coefficient(0.1),
@@ -133,9 +132,9 @@ pub fn spawn_player_event_handler(
             ));
 
             let scale = 4.0;
-            parent.spawn_bundle((
+            parent.spawn((
                 Collider::capsule_y((height-2.0*radius)/2.0*scale, radius*scale),
-                Sensor(true),
+                Sensor,
                 ActiveEvents::COLLISION_EVENTS,
             ));
         });
@@ -168,17 +167,19 @@ pub fn display_events(
         };
 
         let (player,collider) = if let Ok(x) = colliders.get(*e1) {
-            (x.0,*e1)
+            (x.get(),*e1)
         }else if let Ok(x) = colliders.get(*e2) {
-            (x.0,*e2)
+            (x.get(),*e2)
         }else{ continue };
 
         let interactions: Vec<_> = context.intersections_with(collider).collect();
         println!("{:?}",interactions);
-        if interactions.iter().any(|(_e1,_e2,touches)| *touches) {
-            players.get_mut(player).unwrap().0 = true;
-        }else{
-            players.get_mut(player).unwrap().0 = false;
+        if let Ok(mut player) = players.get_mut(player) {
+            if interactions.iter().any(|(_e1,_e2,touches)| *touches) {
+                player.0 = true;
+            }else{
+                player.0 = false;
+            }
         }
     }
 }

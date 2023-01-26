@@ -11,6 +11,7 @@ use serde::{Serialize, Deserialize};
 //when in server mode -> GameState::Running + Server resource (syncs to clients)
 //      when connect localy -> + display game + handle input, no Client resource because it doesnt sync from server (we are the server)
 
+#[derive(Resource)]
 pub struct NetConfig {
     pub ip_port: String,
     pub msg_table: MsgTableParts,

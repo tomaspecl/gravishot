@@ -17,7 +17,7 @@ use serde::{Serialize, Deserialize};
 /// Server generates this on startup or loads it from a file.
 /// Server sends this to client which uses this to load the map.
 /// TODO: more general maps - general meshes and objects
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Resource, Serialize, Deserialize, Debug, Clone)]
 pub struct Map {
     asteroids: Vec<AsteroidInstance>,
 }
