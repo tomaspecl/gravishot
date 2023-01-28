@@ -79,7 +79,10 @@ impl Plugin for GameStatePlugin {
         .add_system_set(
             ConditionSet::new()
             .run_in_state(GameState::Running)
-            .with_system(player::movement_system)
+            .with_system(player::player_control::movement_system)
+            .with_system(player::player_control::change_player_control)
+            .with_system(player::player_control::center_cursor
+                .run_if(player::player_control::is_first_person))
             .with_system(player::spawn_player_event_handler)
             .with_system(player::despawn_player_event_handler)
             .with_system(player::display_events)

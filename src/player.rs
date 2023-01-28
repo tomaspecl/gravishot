@@ -1,14 +1,30 @@
+pub mod player_control;
+
 use crate::physics::{AtractedByGravity, GravityVector};
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
-use bevy::input::mouse::MouseMotion;
-
 use bevy_pigeon::sync::{NetComp, NetEntity, CNetDir, SNetDir};
 use bevy_pigeon::types::NetTransform;
 use carrier_pigeon::CId;
 use carrier_pigeon::net::CIdSpec;
+use once_cell::unsync::Lazy;
+
+pub const CAMERA_1ST_PERSON: Lazy<Transform> = Lazy::new(|| Transform {
+    translation: Vec3::new(0.0,1.0,0.0),
+    ..Transform::IDENTITY
+});
+
+pub const CAMERA_3RD_PERSON: Lazy<Transform> = Lazy::new(|| Transform {
+    translation: Vec3::new(0.0,1.0,0.7),
+    rotation: {
+        let angle: f32 = -0.7;
+        let (s, c) = (angle * 0.5).sin_cos();
+        Quat::from_xyzw(s, 0.0, 0.0, c)
+    },
+    ..Transform::IDENTITY
+});
 
 pub struct PlayerPlugin;
 
@@ -17,7 +33,10 @@ impl Plugin for PlayerPlugin {
         app
         .add_event::<SpawnPlayerEvent>()
         .add_event::<DespawnPlayerEvent>()
-        .register_type::<Standing>();
+        .register_type::<Standing>()
+        .insert_resource(player_control::PlayerControl {
+            first_person: false,
+        });
     }
 }
 
@@ -91,25 +110,30 @@ pub fn spawn_player_event_handler(
             NetEntity::new(nid),
             crate::networking::NetMarker::Player,
         ));
+
+        let c_dir;
+        let s_dir;
         
         if cid==local_player {
-            player.insert((
-                LocalPlayer,
-                NetComp::<Transform, NetTransform>::new(true,
-                    CNetDir::To,
-                    SNetDir::To(CIdSpec::All)
-                )
-            ));
+            player.insert(LocalPlayer);
 
             player.with_children(|parent| {
                 let mut camera = Camera3dBundle::default();
-                //let mut camera = OrthographicCameraBundle::new_3d();
-                camera.transform = Transform::from_xyz(0.0,1.0,0.7).mul_transform(Transform::from_rotation(Quat::from_rotation_x(-0.7)));
+                camera.transform = *CAMERA_3RD_PERSON;
                 parent.spawn(camera);
             });
+
+            c_dir = CNetDir::To;
+            s_dir = SNetDir::To(CIdSpec::All);
         }else{
-            player.insert(NetComp::<Transform, NetTransform>::new(true,CNetDir::From,SNetDir::ToFrom(CIdSpec::Except(cid),CIdSpec::Only(cid))));
+            c_dir = CNetDir::From;
+            s_dir = SNetDir::ToFrom(CIdSpec::Except(cid),CIdSpec::Only(cid));
         }
+
+        player.insert((
+            NetComp::<Transform, NetTransform>::new(true,c_dir,s_dir),
+            NetComp::<Velocity, Velocity>::new(true,c_dir,s_dir),
+        ));
         
         player
         .with_children(|parent| {
@@ -197,52 +221,6 @@ pub fn despawn_player_event_handler(
                 commands.entity(entity).despawn_recursive();
             }
         }
-    }
-}
-
-pub fn movement_system(
-    mut query: Query<(&mut Transform, &mut Velocity), With<LocalPlayer>>,
-    keyboard: Res<Input<KeyCode>>,
-    mut mouse: EventReader<MouseMotion>,
-    mouse_button: Res<Input<MouseButton>>,
-) {
-    let mut t = Vec3::ZERO;
-    let mut r = Vec3::ZERO;
-
-    for key in keyboard.get_pressed() {
-        t += match key {
-            KeyCode::W => -Vec3::Z,
-            KeyCode::S => Vec3::Z,
-            KeyCode::A => -Vec3::X,
-            KeyCode::D => Vec3::X,
-            KeyCode::Space => Vec3::Y,
-            KeyCode::LShift => -Vec3::Y,
-            _ => Vec3::ZERO,
-        };
-
-        r += match key {
-            KeyCode::Q => Vec3::Z,
-            KeyCode::E => -Vec3::Z,
-            _ => Vec3::ZERO,
-        };
-    }
-
-    if mouse_button.pressed(MouseButton::Left) {
-        for mouse_motion in mouse.iter() {
-            r += Vec3::new(mouse_motion.delta.x,mouse_motion.delta.y,0.0) * -0.1
-        }
-    }
-
-    for (mut transform, mut velocity) in query.iter_mut() {
-        let rot = transform.rotation;
-    
-        let translation_coefficient = 0.1;
-        let rotation_coefficient = 0.1;
-    
-        velocity.linvel += (rot * t) * translation_coefficient;
-        let rot = r * rotation_coefficient;
-    
-        transform.rotation *= Quat::from_euler(EulerRot::YXZ,rot.x,rot.y,rot.z);
     }
 }
 

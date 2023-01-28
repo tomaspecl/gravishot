@@ -36,3 +36,4 @@ carrier-pigeon = { git = "https://github.com/MitchellMarinoDev/carrier-pigeon", 
 serde = "1"
 bevy_egui = "0.19"
 iyes_loopless = "0.9"
+once_cell = "1.17"

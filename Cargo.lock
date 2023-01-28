@@ -1902,6 +1902,7 @@ dependencies = [
  "bevy_rapier3d",
  "carrier-pigeon",
  "iyes_loopless",
+ "once_cell",
  "rand",
  "serde",
 ]
