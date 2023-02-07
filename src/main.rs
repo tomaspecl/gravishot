@@ -1,8 +1,10 @@
-mod physics;
+mod gravity;
 mod player;
 mod gamestate;
 mod networking;
 mod map;
+mod input;
+mod bullet;
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
@@ -31,7 +33,7 @@ fn main() {
         }
         p
     };
-
+    
     App::new()
     .insert_resource(AmbientLight {
         color: Color::rgb(1.0,1.0,1.0),
@@ -43,7 +45,8 @@ fn main() {
         ..Default::default()
     })
     .add_plugin(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default())*/
-    .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
+    .add_plugin(RapierPhysicsPlugin::<NoUserData>::default()
+        .with_default_system_setup(false))
     .add_plugin(bevy_egui::EguiPlugin)
     //.add_plugin(EditorPlugin)
 
@@ -53,7 +56,7 @@ fn main() {
     .add_plugin(bevy_inspector_egui::quick::WorldInspectorPlugin)
 
     .add_plugin(player::PlayerPlugin)
-    .add_plugin(physics::GravityPlugin)
+    .add_plugin(gravity::GravityPlugin)
     .add_plugin(gamestate::GameStatePlugin)
     .add_plugin(networking::NetworkPlugin)
     

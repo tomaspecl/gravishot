@@ -2,8 +2,6 @@ pub mod asteroid;
 
 use bevy::prelude::*;
 
-use bevy_pigeon::types::NetTransform;
-
 use rand::{Rng, thread_rng};
 use serde::{Serialize, Deserialize};
 
@@ -22,10 +20,27 @@ pub struct Map {
     asteroids: Vec<AsteroidInstance>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct AsteroidInstance {
-    id: usize,
-    transform: NetTransform,
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+pub struct AsteroidInstance {
+    pub id: usize,
+    pub transform: Transform,
+}
+impl AsteroidInstance {
+    pub fn new(transform: Option<Transform>, id: Option<usize>, asteroids: &asteroid::AsteroidAssets) -> AsteroidInstance {
+        let mut rng = thread_rng();
+        let l = asteroids.asteroids.len();
+        let id = id.and_then(|x| if x<l {Some(x)}else{None}).unwrap_or(rng.gen_range(0..l));
+        let transform = transform.unwrap_or(Transform::from_xyz(    //TODO: random orientation + scale
+            rng.gen_range(-50.0..50.0),
+            rng.gen_range(-50.0..50.0),
+            rng.gen_range(-50.0..50.0),
+        ).with_scale(Vec3::splat(5.0)));
+
+        AsteroidInstance {
+            id,
+            transform,
+        }
+    }
 }
 
 pub fn generate_map(
@@ -34,21 +49,8 @@ pub fn generate_map(
 ) {
     let mut asteroids = Vec::new();
 
-    let mut rng = thread_rng();
-
-    for _ in 0..40 {
-        let transform = Transform::from_xyz(    //TODO: random orientation + scale
-            rng.gen_range(-50.0..50.0),
-            rng.gen_range(-50.0..50.0),
-            rng.gen_range(-50.0..50.0),
-        ).with_scale(Vec3::splat(5.0)).into();
-
-        let id = rng.gen_range(0..assets.asteroids.len());
-
-        asteroids.push(AsteroidInstance {
-            id,
-            transform,
-        });
+    for _ in 0..10 {
+        asteroids.push(AsteroidInstance::new(None, None, &assets));
     }
 
     commands.insert_resource(Map {
@@ -61,7 +63,7 @@ pub fn load_from_map(
     map: Res<Map>,
     assets: Res<asteroid::AsteroidAssets>
 ) {
-    for asteroid in map.asteroids.iter() {
-        asteroid::spawn_asteroid(asteroid.transform.into(), Some(asteroid.id), &mut commands, &assets);
+    for &asteroid in map.asteroids.iter() {
+        asteroid::spawn_asteroid(&mut commands, asteroid, &assets);
     }
 }

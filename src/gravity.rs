@@ -13,23 +13,21 @@ impl Plugin for GravityPlugin {
         .register_type::<AtractedByGravity>()
         .register_type::<CreatesGravity>()
         .register_type::<GravityVector>()
-        .add_system_to_stage(CoreStage::PreUpdate,force_reset)
-        .add_system(gravity_system)
         .add_system(marker_system);
     }
 }
 
 //TODO: use sparse set
-#[derive(Component,Reflect,Clone)]
+#[derive(Component, Reflect, Clone, Copy)]
 pub struct AtractedByGravity(pub f32);
 
-#[derive(Component,Reflect,Clone)]
+#[derive(Component, Reflect, Clone, Copy)]
 pub struct CreatesGravity(pub f32);
 
-#[derive(Component,Reflect,Clone)]
+#[derive(Component, Reflect, Clone, Copy)]
 pub struct GravityVector(pub Vec3);
 
-fn gravity_system(
+pub fn gravity_system(
     mut affected: Query<(&RapierRigidBodyHandle,&mut ExternalForce,Option<&mut GravityVector>,&AtractedByGravity)>,
     sources: Query<(&RapierRigidBodyHandle,&CreatesGravity)>,
     context: Res<RapierContext>,
@@ -59,7 +57,7 @@ fn gravity_system(
     }
 }
 
-fn force_reset(
+pub fn force_reset(
     mut forces: Query<&mut ExternalForce>,
 ) {
     for mut force in forces.iter_mut() {
@@ -72,21 +70,21 @@ fn marker_system(
     atracted: Query<(Entity,&AtractedByGravity,Option<&Children>),Without<RigidBody>>,
     creates: Query<(Entity,&CreatesGravity,Option<&Children>),Without<RigidBody>>,
 ) {
-    for (e,g,c) in atracted.iter() {
+    for (e,&g,c) in atracted.iter() {
         if let Some(c) = c {
             for child in c.iter() {
                 commands.entity(*child)
-                    .insert(g.clone());
+                    .insert(g);
             }
         }
         commands.entity(e).remove::<AtractedByGravity>();
     }
 
-    for (e,g,c) in creates.iter() {
+    for (e,&g,c) in creates.iter() {
         if let Some(c) = c {
             for child in c.iter() {
                 commands.entity(*child)
-                    .insert(g.clone());
+                    .insert(g);
             }
         }
         commands.entity(e).remove::<CreatesGravity>();

@@ -1,13 +1,13 @@
-use crate::player::LocalPlayer;
+use crate::{networking::rollback::Inputs, input::Buttons};
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
-use bevy::input::mouse::MouseMotion;
-
-#[derive(Resource)]
+#[derive(Resource, Reflect, Default)]
+#[reflect(Resource)]
 pub struct PlayerControl {
     pub first_person: bool,
+    pub sensitivity: f32,
 }
 
 pub fn is_first_person(control: Res<PlayerControl>) -> bool {
@@ -23,7 +23,7 @@ pub fn change_player_control(
     input: Res<Input<MouseButton>>,
     mut windows: ResMut<Windows>,
     mut control: ResMut<PlayerControl>,
-    player: Query<Entity, With<LocalPlayer>>,
+    player: Query<Entity, With<super::LocalPlayer>>,
     mut camera: Query<(&mut Transform, &Parent), With<Camera>>,
 ) {
     use bevy::window::CursorGrabMode;
@@ -50,48 +50,69 @@ pub fn change_player_control(
 }
 
 pub fn movement_system(
-    mut query: Query<(&mut Transform, &mut Velocity), With<LocalPlayer>>,
-    keyboard: Res<Input<KeyCode>>,
-    mut mouse: EventReader<MouseMotion>,
-    mouse_button: Res<Input<MouseButton>>,
-    player_control: Res<PlayerControl>,
+    inputs: Res<Inputs>,
+    mut query: Query<(&super::Player, &mut Transform, &mut Velocity, &super::Standing)>,
 ) {
-    let mut t = Vec3::ZERO;
-    let mut r = Vec3::ZERO;
+    for (player,mut transform,mut velocity,&_standing) in query.iter_mut() {
+        let Some(input) = inputs.0.get(player) else{continue};
+        
+        let b = input.buttons;
+        let m = &input.mouse;
 
-    for key in keyboard.get_pressed() {
-        t += match key {
-            KeyCode::W => -Vec3::Z,
-            KeyCode::S => Vec3::Z,
-            KeyCode::A => -Vec3::X,
-            KeyCode::D => Vec3::X,
-            KeyCode::Space => Vec3::Y,
-            KeyCode::LShift => -Vec3::Y,
-            _ => Vec3::ZERO,
-        };
+        let mut t = Vec3::ZERO;
+        let mut r = Vec3::ZERO;
 
-        r += match key {
-            KeyCode::Q => Vec3::Z,
-            KeyCode::E => -Vec3::Z,
-            _ => Vec3::ZERO,
-        };
-    }
-
-    if player_control.first_person || mouse_button.pressed(MouseButton::Left) {
-        for mouse_motion in mouse.iter() {
-            r += Vec3::new(mouse_motion.delta.x,mouse_motion.delta.y,0.0) * -0.1
+        use crate::input::pressed;
+        pressed! {(b);
+            //translation
+            Buttons::W        => t += -Vec3::Z;
+            Buttons::S        => t += Vec3::Z;
+            Buttons::A        => t += -Vec3::X;
+            Buttons::D        => t += Vec3::X;
+            Buttons::Space    => t += Vec3::Y;
+            Buttons::Shift    => t += -Vec3::Y;
+            //rotation
+            Buttons::Q        => r += Vec3::Z;
+            Buttons::E        => r += -Vec3::Z;
         }
-    }
+    
+        for &(x,y) in m.deltas.iter() {
+            r += Vec3::new(x as f32,y as f32,0.0) * -0.1
+        }
 
-    for (mut transform, mut velocity) in query.iter_mut() {
         let rot = transform.rotation;
     
         let translation_coefficient = 0.1;
         let rotation_coefficient = 0.1;
     
-        velocity.linvel += (rot * t) * translation_coefficient;
+        let mov = (rot * t) * translation_coefficient;
+        /*if standing.0 {   //TODO: implement snap to ground
+            if mov==Vec3::ZERO {
+                //controller.translation = None;
+            }else{
+                //controller.translation = Some(mov);
+            }
+        }else{*/
+            velocity.linvel += mov;
+        //}
+        
         let rot = r * rotation_coefficient;
     
         transform.rotation *= Quat::from_euler(EulerRot::YXZ,rot.x,rot.y,rot.z);
     }
+}
+
+pub fn read_result_system(controllers: Query<&KinematicCharacterControllerOutput>) {
+    let p = match controllers.get_single() {
+        Ok(p) => p,
+        Err(_) => return,
+    };
+    let KinematicCharacterControllerOutput {
+        grounded,
+        desired_translation,
+        effective_translation,
+        collisions,
+    } = p;
+    println!("Player moved by {effective_translation:?}, wanted move {desired_translation:?} and touches the ground: {grounded:?}");
+    dbg!(collisions);
 }

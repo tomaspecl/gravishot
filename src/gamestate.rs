@@ -1,9 +1,11 @@
 mod mainmenu;
 mod spawn_menu;
 
-use crate::{map::asteroid, player, networking};
+use crate::{map, player, networking, input, gravity, bullet};
+use networking::rollback::RollbackStages;
 
 use bevy::prelude::*;
+use bevy_rapier3d::prelude::*;
 use iyes_loopless::prelude::*;
 
 //new idea for representing game state:
@@ -35,6 +37,22 @@ pub enum GameState {
 //    PauseMenu,
 //}
 
+#[derive(SystemLabel)]
+enum LabelSetup {
+    Generate,
+    ServerStart,
+}
+
+#[derive(SystemLabel)]
+enum LabelUpdate {
+    ClearInput,
+    Input,
+    PostInput,
+}
+
+#[derive(StageLabel)]
+struct RollbackStage;
+
 /// Registers systems specific to each [`GameState`] and other related state
 pub struct GameStatePlugin;
 
@@ -48,11 +66,11 @@ impl Plugin for GameStatePlugin {
         .add_loopless_state(GameState::Loading)
 
         //GameState::Loading
-        .add_enter_system(GameState::Loading, asteroid::start_loading)
+        .add_enter_system(GameState::Loading, map::asteroid::start_loading)
         .add_system_set(
             ConditionSet::new()
             .run_in_state(GameState::Loading)
-            .with_system(asteroid::wait_for_load)
+            .with_system(map::asteroid::wait_for_load)
             .into()
         )
 
@@ -65,60 +83,92 @@ impl Plugin for GameStatePlugin {
         )
 
         //GameState::ClientSetup
-        .add_enter_system(GameState::ClientSetup,networking::client::create_client.label("ClientSetup"))
-        .add_enter_system(GameState::ClientSetup,change_state(GameState::Running).after("ClientSetup"))
+        .add_enter_system(GameState::ClientSetup,networking::client::connect)
+        .add_system(networking::client::on_connect)
         .add_exit_system(GameState::ClientSetup,crate::setup)
 
         //GameState::ServerSetup
-        .add_enter_system(GameState::ServerSetup,crate::map::generate_map.label("ServerSetup1"))
-        .add_enter_system(GameState::ServerSetup,networking::server::create_server.label("ServerSetup2"))
-        .add_enter_system(GameState::ServerSetup,change_state(GameState::Running).after("ServerSetup1").after("ServerSetup2"))
+        .add_enter_system(GameState::ServerSetup,map::generate_map.label(LabelSetup::Generate))
+        .add_enter_system(GameState::ServerSetup,networking::server::start.label(LabelSetup::ServerStart))
+        .add_enter_system(GameState::ServerSetup,change_state(GameState::Running).after(LabelSetup::Generate).after(LabelSetup::ServerStart))
         .add_exit_system(GameState::ServerSetup,crate::setup)
 
-        //GameState::Running
-        .add_system_set(
-            ConditionSet::new()
+        //GameState::Running and rollback schedules
+        .add_system(player::player_control::change_player_control
+            .run_in_state(GameState::Running))
+        .add_system(player::player_control::center_cursor
             .run_in_state(GameState::Running)
-            .with_system(player::player_control::movement_system)
-            .with_system(player::player_control::change_player_control)
-            .with_system(player::player_control::center_cursor
-                .run_if(player::player_control::is_first_person))
-            .with_system(player::spawn_player_event_handler)
-            .with_system(player::despawn_player_event_handler)
-            .with_system(player::display_events)
-            .with_system(player::stand_up)
-            .into()
-        )
-        .add_system_set(
-            ConditionSet::new()
+            .run_if(player::player_control::is_first_person))
+
+        .add_system(input::clear
             .run_in_state(GameState::Running)
+            .label(LabelUpdate::ClearInput))
+        .add_system(input::get_local_input
+            .run_in_state(GameState::Running)
+            .label(LabelUpdate::Input)
+            .after(LabelUpdate::ClearInput))
+        .add_system(spawn_menu::ui
+            .run_in_state(GameState::Running)
+            .run_if_resource_exists::<networking::LocalPlayer>()
             .run_if_not(player::local_player_exists)
-            .with_system(spawn_menu::ui)
-            .into()
-        )
+            .label(LabelUpdate::Input)
+            .after(LabelUpdate::ClearInput))
 
         //when server exists    TODO: move to server.rs ? or networking.rs ?
         // Talks to all connected clients and syncs with them
-        .add_system_set(
-            ConditionSet::new()
-            .run_if_resource_exists::<carrier_pigeon::Server>()
-            .with_system(bevy_pigeon::app::server_tick/*.label(bevy_pigeon::NetLabel)*/)
-            .with_system(networking::server::handle_cons/*.after(bevy_pigeon::NetLabel)*/)
-            .with_system(networking::server::send_player_spawns)
-            .with_system(networking::server::handle_player_spawn_requests)
-            .into()
-        )
-
+        .add_system(networking::server::handle
+            .run_if_resource_exists::<networking::server::ServerMarker>()
+            .label(LabelUpdate::PostInput)
+            .after(LabelUpdate::Input))
         //when client exists    TODO: move to client.rs ? or networking.rs ?
         // Talks to the connected server and syncs with it
-        .add_system_set(
-            ConditionSet::new()
-            .run_if_resource_exists::<carrier_pigeon::Client>()
-            .with_system(bevy_pigeon::app::client_tick/*.label(bevy_pigeon::NetLabel)*/)
-            .with_system(networking::client::receive_player_spawns)
-            .with_system(networking::client::receive_player_despawns)
-            .into()
+        .add_system(networking::client::handle
+            .run_if_resource_exists::<networking::client::ClientMarker>()
+            .label(LabelUpdate::PostInput)
+            .after(LabelUpdate::Input))
+
+        //.add_system(player::spawn_player_system
+        //    .run_in_state(GameState::Running)
+        //    .label(LabelUpdate::SpawnDespawn)
+        //    .after(LabelUpdate::PostInput))
+
+        //make sure that Command buffers are applied before rollback_schedule
+        .add_stage_after(
+            CoreStage::Update,
+            RollbackStage,
+            SystemStage::single(networking::rollback::rollback_schedule::<networking::rollback::MyState>
+                .run_in_state(GameState::Running))
         );
+        
+        let mut roll = networking::rollback::RollbackStagesStorage::new();
+
+        roll.get(RollbackStages::CorePreUpdate)
+            .add_system(gravity::force_reset)
+            .add_system(player::spawn_player_system
+                .run_if_resource_exists::<networking::server::ServerMarker>())  //TODO: is it correct?
+            .add_system(bullet::spawn_bullet_system
+                .run_if_resource_exists::<networking::server::ServerMarker>());
+
+        roll.get(RollbackStages::CoreUpdate)
+            .add_system(player::display_events)
+            .add_system(player::stand_up.after(player::display_events))
+            .add_system(player::player_control::movement_system.after(player::display_events))
+            .add_system(player::player_control::read_result_system)
+            .add_system(gravity::gravity_system);
+        
+        roll.get(RollbackStages::PhysicsStagesSyncBackend)
+            .add_system_set(RapierPhysicsPlugin::<NoUserData>::get_systems(PhysicsStages::SyncBackend));
+        
+        roll.get(RollbackStages::PhysicsStagesStepSimulation)
+            .add_system_set(RapierPhysicsPlugin::<NoUserData>::get_systems(PhysicsStages::StepSimulation));
+
+        roll.get(RollbackStages::PhysicsStagesWriteback)
+            .add_system_set(RapierPhysicsPlugin::<NoUserData>::get_systems(PhysicsStages::Writeback));
+
+        roll.get(RollbackStages::PhysicsStagesDetectDespawn)
+            .add_system_set(RapierPhysicsPlugin::<NoUserData>::get_systems(PhysicsStages::DetectDespawn));
+
+        app.insert_resource(roll);
     }
 }
 

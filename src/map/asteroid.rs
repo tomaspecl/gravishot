@@ -1,12 +1,11 @@
-use crate::physics::CreatesGravity;
+use crate::gravity::CreatesGravity;
+use super::AsteroidInstance;
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
 use bevy::gltf::{Gltf, GltfMesh, GltfPrimitive};
 use iyes_loopless::prelude::*;
-
-use rand::{thread_rng,Rng};
 
 #[derive(Resource)]
 pub struct AsteroidAssets {
@@ -21,15 +20,13 @@ pub struct Asteroid {
 }
 
 pub fn spawn_asteroid(
-    transform: Transform,
-    id: Option<usize>,
     commands: &mut Commands,
+    asteroid: AsteroidInstance,
     asteroids: &Res<AsteroidAssets>,
 ) {
-    let mut rng = thread_rng();
+    let id = asteroid.id;
+    let transform = asteroid.transform;
     let asteroids = &asteroids.asteroids;
-    let l = asteroids.len();
-    let id = id.and_then(|x| if x<l {Some(x)}else{None}).unwrap_or(rng.gen_range(0..l));
 
     let a = &asteroids[id];
     let mesh = a.mesh.clone();
@@ -144,7 +141,7 @@ pub fn wait_for_load(
     
                 let gltf = a_gltf.get(&handle).expect("asteroid assets should have been just loaded");
     
-                dbg!(gltf);
+                //dbg!(gltf);
     
                 /*let node = gltf.named_nodes.get("Asteroid1").unwrap();
                 let node = a_node.get(node).unwrap();

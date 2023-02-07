@@ -75,3 +75,12 @@ player with the smallest time dilation sees their clock to tick the fastest, if 
 when the player is getting faster then controlls are getting more sensitive (its harder to aim precisely bacause of it) and it gets harder to move as the player wishes
 time dilation boundaries are used such that the players can not get too far apart in the time dilation sense, its not good when one player is too fast and the other too slow, they will have to move "together" in the time dilation way
 -the map can maybe have black hole in the center and the asteroids orbiting around, the black hole causes huge gravity and time dilation
+
+
+networking
+-authoritative server - server stores the main copy of the world state and resends it to clients and checks that clients are not performing invalid moves or cheats
+-backrolling on server and client - when update is received for past event then the past is updated and replayed
+-every few frames the player sends a summary of its state (Transform,Velocity,...) with the current frame # to the server to check and sync
+-when client receives input from the player (keyboard or mouse) it will send updated data which changed because of the input as well as the current frame # to the server
+-when the server receives update from a client it will compare it with its own copy of the player (client) state and update its state when appropriate (the player movement is ok) or instead send its current state to the player to sync (example: the client is cheating or lagging behind), also when update happens server will resend to other clients
+-the server will also resend summaries of all the clients to all the clients every few frames
