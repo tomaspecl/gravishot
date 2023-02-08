@@ -24,10 +24,8 @@ opt-level = 3
 
 [dependencies]
 bevy = { version = "0.9" }
-#bevy = { version = "0.7", features = ["dynamic"] }
 rand = "0.8.4"
 bevy_rapier3d = { version = "0.20", features = ["debug-render","serde-serialize"] }
-#bevy_rapier3d = { git = "https://github.com/dimforge/bevy_rapier.git", features = ["debug-render","serde-serialize"] }
 bevy-inspector-egui = "0.17"
 #bevy-inspector-egui-rapier = { version = "0.3", features = ["rapier3d"] }
 #bevy_editor_pls = { git = "https://github.com/jakobhellermann/bevy_editor_pls.git" }
