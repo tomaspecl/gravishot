@@ -19,7 +19,7 @@ fn main() {
         default_plugins = default_plugins.set(WindowPlugin {
             add_primary_window: false,
             exit_on_all_closed: false,
-            ..Default::default()
+            ..default()
         })
         .disable::<bevy::winit::WinitPlugin>();
         
@@ -38,9 +38,9 @@ fn main() {
                 cursor_visible: true,
                 cursor_grab_mode: bevy::window::CursorGrabMode::Locked,
                 mode: bevy::window::WindowMode::Windowed,
-                ..Default::default()
+                ..default()
             },
-            ..Default::default()
+            ..default()
         });
         app.insert_resource(AmbientLight {
             color: Color::rgb(1.0,1.0,1.0),
@@ -59,17 +59,17 @@ fn main() {
     }else{
         app
         .add_plugin(bevy_egui::EguiPlugin)
-        .add_plugin(bevy_inspector_egui::quick::WorldInspectorPlugin)
+        .add_plugin(bevy_inspector_egui::quick::WorldInspectorPlugin);
         //.add_plugin(bevy_inspector_egui_rapier::InspectableRapierPlugin)  //TODO: is it still needed?
         //.add_plugin(EditorPlugin)
-        .add_plugin(RapierDebugRenderPlugin::default());
+        //.add_plugin(RapierDebugRenderPlugin::default())
     }
 
     /*
     app
     .add_plugin(bevy::diagnostic::LogDiagnosticsPlugin {
         wait_duration: std::time::Duration::from_secs(5),
-        ..Default::default()
+        ..default()
     })
     .add_plugin(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default()); // */
 
@@ -95,7 +95,7 @@ fn setup(
     commands.spawn(PointLightBundle {
         transform: Transform::from_xyz(4.0, 8.0, 4.0),
         point_light: PointLight::default(),
-        ..Default::default()
+        ..default()
     });
 
     map::load_from_map(commands, map, asteroids);

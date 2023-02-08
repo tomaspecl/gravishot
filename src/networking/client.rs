@@ -68,7 +68,7 @@ pub fn handle(
                         commands.insert_resource(super::rollback::FuturePastSnapshot::<MyState> {
                             snapshot: Snapshot {
                                 inputs: Inputs(HashMap::from([(player,input)])),
-                                ..Default::default()
+                                ..default()
                             },
                             frame,
                         });

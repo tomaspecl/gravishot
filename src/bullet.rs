@@ -28,10 +28,10 @@ pub fn spawn_bullet_system(
                 let rollback = ROLLBACK_ID_COUNTER.get_new();
                 let mut transform = *transform;
                 let forward = transform.forward();
-                transform.translation += forward * 10.0; //TODO: move magic numbers to constants
+                transform.translation += forward * 0.5; //TODO: move magic numbers to constants
 
                 println!("spawning bullet {}",rollback.0);
-                let velocity = Velocity::linear(forward * 10.0);
+                let velocity = Velocity::linear(forward * 50.0);
                 let event = SpawnBullet {
                     rollback,
                     transform,
@@ -42,6 +42,18 @@ pub fn spawn_bullet_system(
             }else{
                 warn!("player is shooting but is not spawned!");
             }
+        }
+    }
+}
+
+//only on the server
+pub fn despawn_bullet_system(
+    mut commands: Commands,
+    bullets: Query<(Entity, &Transform, &Velocity), With<Bullet>>,
+) {
+    for (bullet,transform,velocity) in bullets.iter() {
+        if transform.translation.length()>200.0 || velocity.linvel.length()<1.0 {
+            commands.entity(bullet).despawn_recursive();
         }
     }
 }
@@ -60,7 +72,12 @@ pub fn make_bullet(event: SpawnBullet, entity: Option<Entity>) -> impl Fn(&mut W
                 subdivisions: 5,
             }));
         let material = world.resource_mut::<Assets<StandardMaterial>>()
-            .add(Color::rgb(1.0, 0.0, 0.0).into());
+            .add(StandardMaterial {
+                base_color: Color::RED,
+                perceptual_roughness: 0.3,
+                metallic: 1.0,
+                ..default()
+            });
 
         let mut bullet = if let Some(entity) = entity {
             world.entity_mut(entity)
@@ -70,11 +87,14 @@ pub fn make_bullet(event: SpawnBullet, entity: Option<Entity>) -> impl Fn(&mut W
 
         bullet.insert((
             Bullet,
-            transform,
             RigidBody::Dynamic,
             velocity,
             AtractedByGravity(0.1),
-
+            SpatialBundle {
+                transform,
+                ..default()
+            },
+            
             rollback,
             crate::networking::EntityType::Bullet,
 
@@ -88,9 +108,6 @@ pub fn make_bullet(event: SpawnBullet, entity: Option<Entity>) -> impl Fn(&mut W
                 linear_damping: 0.0,
                 angular_damping: 1.0,
             },
-
-            GlobalTransform::default(),
-            ComputedVisibility::default(),
         ));
         
         bullet
@@ -98,7 +115,7 @@ pub fn make_bullet(event: SpawnBullet, entity: Option<Entity>) -> impl Fn(&mut W
             parent.spawn(PbrBundle {
                 mesh,
                 material,
-                ..Default::default()
+                ..default()
             });
         });
     }

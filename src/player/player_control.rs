@@ -1,4 +1,5 @@
-use crate::{networking::rollback::Inputs, input::Buttons};
+use crate::networking::rollback::Inputs;
+use crate::input::{Buttons, MOUSE_SCALE};
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
@@ -77,7 +78,7 @@ pub fn movement_system(
         }
     
         for &(x,y) in m.deltas.iter() {
-            r += Vec3::new(x as f32,y as f32,0.0) * -0.1
+            r += Vec3::new(x as f32 / MOUSE_SCALE,y as f32 / MOUSE_SCALE,0.0) * -0.1
         }
 
         let rot = transform.rotation;

@@ -50,6 +50,8 @@ pub enum Buttons {
 }
 impl Default for Buttons { fn default() -> Self { Self::none() } }
 
+pub const MOUSE_SCALE: f32 = 100.0;
+
 #[derive(Reflect, FromReflect, Default, Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
 pub struct MouseDelta {
     pub deltas: Vec<(i16,i16)>,  //TODO: optimize size, possibly by combining all deltas into a single delta with the same effect?
@@ -117,8 +119,9 @@ pub fn get_local_input(
             }
             //assert!((x-x.trunc()).abs()<0.01);
             //assert!((y-y.trunc()).abs()<0.01);
-            let x = (x.trunc() as i32).min(i16::MAX as i32).max(i16::MIN as i32) as i16;
-            let y = (y.trunc() as i32).min(i16::MAX as i32).max(i16::MIN as i32) as i16;
+            
+            let x = ((MOUSE_SCALE*x).trunc() as i32).min(i16::MAX as i32).max(i16::MIN as i32) as i16;
+            let y = ((MOUSE_SCALE*y).trunc() as i32).min(i16::MAX as i32).max(i16::MIN as i32) as i16;
             mouse.deltas.push((x,y));
         }
     }

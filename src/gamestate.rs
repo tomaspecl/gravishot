@@ -152,6 +152,8 @@ impl Plugin for GameStatePlugin {
             .add_system(player::spawn_player_system
                 .run_if_resource_exists::<networking::server::ServerMarker>())  //TODO: is it correct?
             .add_system(bullet::spawn_bullet_system
+                .run_if_resource_exists::<networking::server::ServerMarker>())
+            .add_system(bullet::despawn_bullet_system
                 .run_if_resource_exists::<networking::server::ServerMarker>());
 
         roll.get(RollbackStages::CoreUpdate)

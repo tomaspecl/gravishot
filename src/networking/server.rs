@@ -139,11 +139,11 @@ pub fn handle(
                                     if !state.fixed && !state_cor.fixed && s.entity==c.entity {
                                         let condition = 
                                             //TODO: move magic values into constants
-                                            s.transform.translation.abs_diff_eq(c.transform.translation, 0.1)
-                                            && s.transform.rotation.abs_diff_eq(c.transform.rotation, 0.1)
+                                            s.transform.translation.distance(c.transform.translation) < 0.1
+                                            && s.transform.rotation.angle_between(c.transform.rotation) < 0.1
                                             && s.transform.scale == c.transform.scale
-                                            && s.velocity.linvel.abs_diff_eq(c.velocity.linvel, 0.1)  
-                                            && s.velocity.angvel.abs_diff_eq(c.velocity.angvel, 0.1);
+                                            && s.velocity.linvel.distance(c.velocity.linvel) < 0.1  
+                                            && s.velocity.angvel.distance(c.velocity.angvel) < 0.1;
                                         if condition {
                                             *state = state_cor;
                                             *snapshot.modified = true;  //TODO: resend to others

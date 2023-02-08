@@ -37,7 +37,7 @@ impl Plugin for PlayerPlugin {
         .register_type::<player_control::PlayerControl>()
         .insert_resource(player_control::PlayerControl {
             first_person: false,
-            sensitivity: 0.5,
+            sensitivity: 0.3,
         });
     }
 }
@@ -103,7 +103,7 @@ pub fn make_player(event: SpawnPlayer, entity: Option<Entity>) -> impl Fn(&mut W
             .add(Mesh::from(shape::Capsule {
                 radius,
                 depth: height-2.0*radius,
-                ..Default::default()
+                ..default()
             }));
         let material = world.resource_mut::<Assets<StandardMaterial>>()
             .add(Color::rgb(0.8, 0.7, 0.6).into());
@@ -116,11 +116,13 @@ pub fn make_player(event: SpawnPlayer, entity: Option<Entity>) -> impl Fn(&mut W
 
         player.insert((
             player_id,
-            transform,
+            SpatialBundle {
+                transform,
+                ..default()
+            },
             RigidBody::Dynamic,
             Velocity::default(),
             ExternalForce::default(),
-            //ExternalImpulse::default(),
             Damping {
                 linear_damping: 0.0,
                 angular_damping: 1.0,
@@ -128,8 +130,6 @@ pub fn make_player(event: SpawnPlayer, entity: Option<Entity>) -> impl Fn(&mut W
             AtractedByGravity(0.1),
             GravityVector(Vec3::ZERO),
             Standing(false),
-            GlobalTransform::default(),
-            ComputedVisibility::default(),
             rollback,
             crate::networking::EntityType::Player(player_id),
         ));
@@ -153,7 +153,7 @@ pub fn make_player(event: SpawnPlayer, entity: Option<Entity>) -> impl Fn(&mut W
                 mesh,
                 material,
                 transform: Transform::from_xyz(0.0, 0.0, 0.0),
-                ..Default::default()
+                ..default()
             });
     
             parent.spawn((

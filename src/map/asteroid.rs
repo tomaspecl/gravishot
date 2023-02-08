@@ -38,15 +38,16 @@ pub fn spawn_asteroid(
         RigidBody::KinematicPositionBased,
         collider,
         CreatesGravity(1.0),
-        transform,
-        GlobalTransform::default(),
-        ComputedVisibility::default(),
+        SpatialBundle {
+            transform,
+            ..default()
+        },
     ))
     .with_children(|p|{
         p.spawn(PbrBundle {
             mesh,
             material,
-            ..Default::default()
+            ..default()
         });
     });
 
@@ -124,6 +125,7 @@ pub fn start_loading(
 pub fn wait_for_load(
     mut commands: Commands,
     server: Res<AssetServer>,
+    mut new_mat: ResMut<Assets<StandardMaterial>>,
     handle: Option<Res<AssetsLoading>>,
     a_gltf: Res<Assets<Gltf>>,
     //a_node: Res<Assets<GltfNode>>,
@@ -136,6 +138,12 @@ pub fn wait_for_load(
         match server.get_load_state(&handle.0) {
             LoadState::Loaded => {
                 commands.remove_resource::<AssetsLoading>();
+
+                let default_material = new_mat.add(StandardMaterial {
+                    base_color: Color::GRAY,
+                    perceptual_roughness: 0.4,
+                    ..default()
+                });
     
                 let handle = handle.0.clone();
     
@@ -167,7 +175,7 @@ pub fn wait_for_load(
                         println!("loading asteroid");
                         let mesh_handle = mesh.clone();
                         let mesh = a_mesh.get(&mesh_handle).unwrap();
-                        let material = material.clone().unwrap_or_default();
+                        let material = material.clone().unwrap_or(default_material.clone());
                         let collider = Collider::from_bevy_mesh(mesh,&collider_shape).unwrap();
                         asteroids.push(Asteroid {
                             mesh: mesh_handle,
