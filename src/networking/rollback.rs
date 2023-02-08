@@ -301,8 +301,9 @@ pub fn rollback_schedule<S: Restore>(world: &mut World) {
     let mut future = world.remove_resource::<FuturePastSnapshot<S>>();
     
     world.resource_scope(|world, mut snapshots: Mut<Snapshots<S>>| {
-        let target_frame = future.as_ref().map(|x| x.frame).unwrap_or(snapshots.frame)+1;
-        while /*snapshots.frame<target_frame ||*/ snapshots.last_frame_time<now {
+        let _target_frame = future.as_ref().map(|x| x.frame).unwrap_or(snapshots.frame)+1;
+        while /*snapshots.frame<_target_frame ||*/ snapshots.last_frame_time<now {
+            //println!("rollback update now {now} target time {} frame {} target frame {}",snapshots.last_frame_time,snapshots.frame,_target_frame);
             //insert the future snapshot when the correct frame is reached
             if let Some(f) = future.as_ref() {
                 if f.frame==snapshots.frame {
@@ -325,32 +326,35 @@ pub fn rollback_schedule<S: Restore>(world: &mut World) {
 
             let mut needs_restore = false;  //TODO: optimize -> instead store last loaded snapshot and do not restore when it is already loaded
             let len  = snapshots.buffer.len();
-            for i in 0..len {
-                let snapshot = snapshots.buffer.get_mut(i).expect("index i is always <= length-2");
+            for i in 0..len-2 {
+                let snapshot = snapshots.buffer.get_mut(i)
+                    .expect("index i is always < length-2");
                 
-                if i==len-2 {
-                    snapshot.modified = false;
-                    if needs_restore {
-                        snapshot.restore(world);
-                    }
-                    run_update(world);
-                    let next_snapshot = snapshots.buffer.get_mut(i+1)
-                        .expect("index i is always <= length-2");
-                    next_snapshot.modified = true;
-                    next_snapshot.save_state(world);
-                    break;
-                }else if snapshot.modified {
+                if snapshot.modified {
                     snapshot.modified = false;
                     needs_restore = true;
 
                     snapshot.restore(world);
                     run_update(world);
                     let next_snapshot = snapshots.buffer.get_mut(i+1)
-                        .expect("index i is always <= length-2");
+                        .expect("index i is always < length-2");
                     next_snapshot.modified = true;
                     next_snapshot.save_state(world);
-                }else{continue}
+                }
             }
+
+            let snapshot = snapshots.buffer.get_mut(len-2)
+                .expect("second last snapshot should exist");
+
+            snapshot.modified = false;
+            if needs_restore {
+                snapshot.restore(world);
+            }
+            run_update(world);
+            let next_snapshot = snapshots.buffer.back_mut()
+                .expect("should contain at least one Snapshot");
+            next_snapshot.modified = true;
+            next_snapshot.save_state(world);
         }
     });
     if let Some(future) = future.take() {

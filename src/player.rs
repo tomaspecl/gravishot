@@ -37,7 +37,7 @@ impl Plugin for PlayerPlugin {
         .register_type::<player_control::PlayerControl>()
         .insert_resource(player_control::PlayerControl {
             first_person: false,
-            sensitivity: 0.1,
+            sensitivity: 0.5,
         });
     }
 }

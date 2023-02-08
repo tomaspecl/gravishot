@@ -74,7 +74,7 @@ pub fn handle(
                         });
                         return;
                     },
-                    _ => ()
+                    SnapshotType::SuperPast => ()   //TODO: slow down?
                 }
             },
             ServerMessage::SlowDown(frame) => {

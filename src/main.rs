@@ -27,10 +27,9 @@ fn main() {
             backends: None,
             ..default()
         })
-        //.insert_resource(bevy::app::ScheduleRunnerSettings::run_loop(bevy::utils::Duration::from_secs_f64(
-        //    1.0 / 60.0,
-        //)))
-        ;
+        .insert_resource(bevy::app::ScheduleRunnerSettings::run_loop(bevy::utils::Duration::from_secs_f64(
+            1.0 / 60.0  //TODO: figure out why the server laggs behind when there is no wait_duration
+        )));
     }else{
         default_plugins = default_plugins.set(WindowPlugin {
             window: WindowDescriptor {
@@ -66,7 +65,7 @@ fn main() {
         .add_plugin(RapierDebugRenderPlugin::default());
     }
 
-    //*
+    /*
     app
     .add_plugin(bevy::diagnostic::LogDiagnosticsPlugin {
         wait_duration: std::time::Duration::from_secs(5),
