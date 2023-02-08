@@ -182,7 +182,7 @@ pub fn wait_for_load(
                     asteroids,
                 });
 
-                commands.insert_resource(NextState(crate::gamestate::GameState::MainMenu));
+                commands.insert_resource(NextState(crate::gamestate::GameState::LoadingDone));
             },
             LoadState::Failed | LoadState::Unloaded => panic!("Could not load asteroid assets"),
             _ => ()

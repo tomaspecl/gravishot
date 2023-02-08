@@ -10,14 +10,30 @@ use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
 fn main() {
-    let default_plugins = {
-        #[allow(unused_mut)]
-        let mut p = DefaultPlugins.build()
-        .set(WindowPlugin {
+    let mut app = App::new();
+
+    #[allow(unused_mut)]
+    let mut default_plugins = DefaultPlugins.build();
+
+    if cfg!(feature="headless") {
+        default_plugins = default_plugins.set(WindowPlugin {
+            add_primary_window: false,
+            exit_on_all_closed: false,
+            ..Default::default()
+        })
+        .disable::<bevy::winit::WinitPlugin>();
+        
+        app.insert_resource(bevy::render::settings::WgpuSettings {
+            backends: None,
+            ..default()
+        })
+        //.insert_resource(bevy::app::ScheduleRunnerSettings::run_loop(bevy::utils::Duration::from_secs_f64(
+        //    1.0 / 60.0,
+        //)))
+        ;
+    }else{
+        default_plugins = default_plugins.set(WindowPlugin {
             window: WindowDescriptor {
-                //width: 200.0,
-                //height: 100.0,
-                //position: Some(Vec2::ZERO),
                 title: "GraviShot".to_string(),
                 resizable: true,
                 cursor_visible: true,
@@ -27,40 +43,46 @@ fn main() {
             },
             ..Default::default()
         });
+        app.insert_resource(AmbientLight {
+            color: Color::rgb(1.0,1.0,1.0),
+            brightness: 0.2,
+        });
+    }
 
-        #[cfg(feature="include_assets")] {
-            p = p.add_before::<bevy::asset::AssetPlugin, _>(bevy_embedded_assets::EmbeddedAssetPlugin);
-        }
-        p
-    };
+    #[cfg(feature="include_assets")] {
+        default_plugins = default_plugins.add_before::<bevy::asset::AssetPlugin, _>(bevy_embedded_assets::EmbeddedAssetPlugin);
+    }
     
-    App::new()
-    .insert_resource(AmbientLight {
-        color: Color::rgb(1.0,1.0,1.0),
-        brightness: 0.2,
-    })
-    .add_plugins(default_plugins)
-    /*.add_plugin(bevy::diagnostic::LogDiagnosticsPlugin {
+    app.add_plugins(default_plugins);
+
+    if cfg!(feature="headless") { 
+        app.add_plugin(bevy::app::ScheduleRunnerPlugin);
+    }else{
+        app
+        .add_plugin(bevy_egui::EguiPlugin)
+        .add_plugin(bevy_inspector_egui::quick::WorldInspectorPlugin)
+        //.add_plugin(bevy_inspector_egui_rapier::InspectableRapierPlugin)  //TODO: is it still needed?
+        //.add_plugin(EditorPlugin)
+        .add_plugin(RapierDebugRenderPlugin::default());
+    }
+
+    //*
+    app
+    .add_plugin(bevy::diagnostic::LogDiagnosticsPlugin {
         wait_duration: std::time::Duration::from_secs(5),
         ..Default::default()
     })
-    .add_plugin(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default())*/
+    .add_plugin(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default()); // */
+
+    app
     .add_plugin(RapierPhysicsPlugin::<NoUserData>::default()
         .with_default_system_setup(false))
-    .add_plugin(bevy_egui::EguiPlugin)
-    //.add_plugin(EditorPlugin)
-
-    .add_plugin(RapierDebugRenderPlugin::default())
-
-    //.add_plugin(bevy_inspector_egui_rapier::InspectableRapierPlugin)
-    .add_plugin(bevy_inspector_egui::quick::WorldInspectorPlugin)
 
     .add_plugin(player::PlayerPlugin)
     .add_plugin(gravity::GravityPlugin)
     .add_plugin(gamestate::GameStatePlugin)
     .add_plugin(networking::NetworkPlugin)
     
-    //.add_state(gamestate::GameState::Loading)
     .add_system(bevy::window::close_on_esc)
 
     .run();

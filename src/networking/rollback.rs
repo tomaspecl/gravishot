@@ -6,7 +6,7 @@ use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
 use bevy::ecs::query::WorldQuery;
-use bevy::utils::{HashMap, Entry};
+use bevy::utils::HashMap;
 use circular_buffer::CircularBuffer;
 use serde::{Serialize, Deserialize};
 
@@ -71,11 +71,9 @@ impl<S: Restore> Snapshot<S> {
         let mut query = world.query::<(Entity, &Rollback, S::WriteQuery<'_>)>();
         let mut for_delete = Vec::new();
         let mut remaining_states = self.states.clone();
-        for (ent,&r,state) in query.iter_mut(world) {
-            if let Entry::Occupied(entry) = remaining_states.entry(r) {
-                let state2 = entry.remove().state;
-                state2.restore(state)
-                
+        for (ent,&r,data) in query.iter_mut(world) {
+            if let Some(state2) = remaining_states.remove(&r) {
+                state2.state.restore(data)
             }else{
                 for_delete.push(ent);
             }
@@ -267,7 +265,7 @@ pub enum RollbackStages {
     PhysicsStagesSyncBackend,
     PhysicsStagesStepSimulation,
     PhysicsStagesWriteback,
-    //CorePostUpdate,
+    CorePostUpdate,
     PhysicsStagesDetectDespawn,
     //CoreLast,
     /// DO NOT USE! The total amount of variants of this enum, used when creating Vec<SystemStage>
@@ -303,8 +301,8 @@ pub fn rollback_schedule<S: Restore>(world: &mut World) {
     let mut future = world.remove_resource::<FuturePastSnapshot<S>>();
     
     world.resource_scope(|world, mut snapshots: Mut<Snapshots<S>>| {
-        let target_frame = future.as_ref().map(|x| x.frame).unwrap_or(snapshots.frame+1);
-        while snapshots.frame<target_frame || snapshots.last_frame_time<now {
+        let target_frame = future.as_ref().map(|x| x.frame).unwrap_or(snapshots.frame)+1;
+        while /*snapshots.frame<target_frame ||*/ snapshots.last_frame_time<now {
             //insert the future snapshot when the correct frame is reached
             if let Some(f) = future.as_ref() {
                 if f.frame==snapshots.frame {
@@ -312,7 +310,7 @@ pub fn rollback_schedule<S: Restore>(world: &mut World) {
                     if !snapshot.states.is_empty() {
                         snapshot.restore_state(world);
                     }
-                    if  !snapshot.inputs.0.is_empty() {
+                    if !snapshot.inputs.0.is_empty() {
                         snapshot.restore_inputs(world);
                     }
                 }
