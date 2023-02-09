@@ -152,7 +152,7 @@ pub fn handle(
                             }
                         }
 
-                        let mut for_delete = Vec::new();
+                        /*let mut for_delete = Vec::new();
                         for (&roll,my_s) in my_states.iter_mut() {
                             if let Some(s) = summary_states.remove(&roll) {
                                 //update local states
@@ -169,9 +169,11 @@ pub fn handle(
                         //insert remaining states
                         for (roll,s) in summary_states.drain() {
                             my_states.insert(roll, s);
-                        }
+                        }*/
+                        //TODO: replace with
+                        *my_states = snapshot_summary.states;
 
-                        let mut for_delete = Vec::new();
+                        /*let mut for_delete = Vec::new();
                         for (&player,my_in) in my_inputs.iter_mut() {
                             if let Some(i) = summary_inputs.remove(&player) {
                                 //update local inputs
@@ -188,7 +190,9 @@ pub fn handle(
                         //insert remaining inputs
                         for (player,i) in summary_inputs.drain() {
                             my_inputs.insert(player, i);
-                        }
+                        }*/
+                        //TODO: replace with
+                        *my_inputs = snapshot_summary.inputs.0;
 
                         *my_snapshot.modified = true;   //TODO: only when updated
                     },

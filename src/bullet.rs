@@ -85,6 +85,8 @@ pub fn make_bullet(event: SpawnBullet, entity: Option<Entity>) -> impl Fn(&mut W
             world.spawn_empty()
         };
 
+        //println!("spawning bullet {:?} rollback {}",bullet.id(),rollback.0);
+
         bullet.insert((
             Bullet,
             RigidBody::Dynamic,

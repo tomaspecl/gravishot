@@ -6,7 +6,7 @@ use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
 use bevy::ecs::query::WorldQuery;
-use bevy::utils::HashMap;
+use bevy::utils::{HashMap, Entry};
 use circular_buffer::CircularBuffer;
 use serde::{Serialize, Deserialize};
 
@@ -68,13 +68,16 @@ impl<S: Restore> Snapshot<S> {
         world.insert_resource(self.inputs.clone());
     }
     fn restore_state(&self, world: &mut World) {
+        //println!("restoring state");
         let mut query = world.query::<(Entity, &Rollback, S::WriteQuery<'_>)>();
         let mut for_delete = Vec::new();
         let mut remaining_states = self.states.clone();
         for (ent,&r,data) in query.iter_mut(world) {
             if let Some(state2) = remaining_states.remove(&r) {
+                //println!("restoring entity {ent:?} rollback {}",r.0);
                 state2.state.restore(data)
             }else{
+                //println!("deleting entity {ent:?} rollback {}",r.0);
                 for_delete.push(ent);
             }
         }
@@ -88,9 +91,11 @@ impl<S: Restore> Snapshot<S> {
     fn save_inputs(&mut self, world: &mut World) {
         self.inputs = world.resource::<Inputs>().clone();
     }
-    fn save_state(&mut self, world: &mut World) {
+    fn save_state(&mut self, world: &mut World) {   //TODO: this function could be possibly different on Client/Server?
+        let mut remaining = self.states.clone();    //TODO: use HashSet instead
         for (&r,state_for_save) in
         world.query::<(&Rollback, S::ReadQuery<'_>)>().iter(&world) {
+            remaining.remove(&r);
             self.states.entry(r).and_modify(|state| {
                 if !state.fixed {
                     state.state = S::save(&state_for_save);
@@ -99,6 +104,13 @@ impl<S: Restore> Snapshot<S> {
                 fixed: false,
                 state: S::save(&state_for_save),
             });
+        }
+        //delete state from self, when world does not contain the rollback id, except when state.fixed
+        for (r,_state) in remaining {
+            let Entry::Occupied(e) = self.states.entry(r) else{panic!("remaining is a copy of self.states")};
+            if !e.get().fixed {      //TODO: is this correct?
+                e.remove();
+            }
         }
     }
 }
@@ -331,6 +343,7 @@ pub fn rollback_schedule<S: Restore>(world: &mut World) {
                     .expect("index i is always < length-2");
                 
                 if snapshot.modified {
+                    //println!("rollback modified index {i}");
                     snapshot.modified = false;
                     needs_restore = true;
 
@@ -346,14 +359,15 @@ pub fn rollback_schedule<S: Restore>(world: &mut World) {
             let snapshot = snapshots.buffer.get_mut(len-2)
                 .expect("second last snapshot should exist");
 
+            //println!("last frame index {} modified {} needs restore {needs_restore}",len-2,snapshot.modified);
             snapshot.modified = false;
-            if needs_restore {
+            if needs_restore {  //TODO: can this be instead checked by snapshot.modified?
                 snapshot.restore(world);
             }
             run_update(world);
             let next_snapshot = snapshots.buffer.back_mut()
                 .expect("should contain at least one Snapshot");
-            next_snapshot.modified = true;
+            next_snapshot.modified = false;
             next_snapshot.save_state(world);
         }
     });
