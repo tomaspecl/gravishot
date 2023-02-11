@@ -1,3 +1,8 @@
+// Gravishot
+// Copyright (C) 2023 Tomáš Pecl
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 use crate::input::Input;
 use crate::player::Player;
 use super::rollback::{SnapshotRef, SnapshotType, Snapshot, Snapshots, Inputs, MyState};

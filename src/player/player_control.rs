@@ -1,3 +1,8 @@
+// Gravishot
+// Copyright (C) 2023 Tomáš Pecl
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 use crate::networking::rollback::Inputs;
 use crate::input::{Buttons, MOUSE_SCALE};
 
