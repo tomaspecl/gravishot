@@ -22,29 +22,30 @@ fn main() {
 
     if cfg!(feature="headless") {
         default_plugins = default_plugins.set(WindowPlugin {
-            add_primary_window: false,
-            exit_on_all_closed: false,
-            ..default()
+            primary_window: None,
+            exit_condition: bevy::window::ExitCondition::DontExit,
+            close_when_requested: true,
         })
-        .disable::<bevy::winit::WinitPlugin>();
-        
-        app.insert_resource(bevy::render::settings::WgpuSettings {
-            backends: None,
-            ..default()
-        })
-        .insert_resource(bevy::app::ScheduleRunnerSettings::run_loop(bevy::utils::Duration::from_secs_f64(
-            1.0 / 60.0  //TODO: figure out why the server laggs behind when there is no wait_duration
-        )));
-    }else{
-        default_plugins = default_plugins.set(WindowPlugin {
-            window: WindowDescriptor {
-                title: "GraviShot".to_string(),
-                resizable: true,
-                cursor_visible: true,
-                cursor_grab_mode: bevy::window::CursorGrabMode::Locked,
-                mode: bevy::window::WindowMode::Windowed,
+        .disable::<bevy::winit::WinitPlugin>()
+        .set(bevy::render::RenderPlugin {
+            wgpu_settings: bevy::render::settings::WgpuSettings {
+                backends: None,
                 ..default()
             },
+        });
+    }else{
+        default_plugins = default_plugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "GraviShot".to_string(),
+                resizable: true,
+                cursor: bevy::window::Cursor {
+                    visible: true,
+                    grab_mode: bevy::window::CursorGrabMode::Locked,
+                    ..default()
+                },
+                mode: bevy::window::WindowMode::Windowed,
+                ..default()
+            }),
             ..default()
         });
         app.insert_resource(AmbientLight {
@@ -60,34 +61,38 @@ fn main() {
     app.add_plugins(default_plugins);
 
     if cfg!(feature="headless") { 
-        app.add_plugin(bevy::app::ScheduleRunnerPlugin);
+        app.add_plugins(bevy::app::ScheduleRunnerPlugin::run_loop(bevy::utils::Duration::from_secs_f64(
+            1.0 / 60.0  //TODO: figure out why the server laggs behind when there is no wait_duration
+        )));
     }else{
-        app
-        .add_plugin(bevy_egui::EguiPlugin)
-        .add_plugin(bevy_inspector_egui::quick::WorldInspectorPlugin);
-        //.add_plugin(bevy_inspector_egui_rapier::InspectableRapierPlugin)  //TODO: is it still needed?
-        //.add_plugin(EditorPlugin)
-        //.add_plugin(RapierDebugRenderPlugin::default())
+        app.add_plugins((
+            bevy_egui::EguiPlugin,
+            bevy_inspector_egui::quick::WorldInspectorPlugin::new(),
+            //bevy_inspector_egui_rapier::InspectableRapierPlugin,  //TODO: is it still needed?
+            //EditorPlugin,
+            //RapierDebugRenderPlugin::default(),
+        ));
     }
 
     /*
-    app
-    .add_plugin(bevy::diagnostic::LogDiagnosticsPlugin {
-        wait_duration: std::time::Duration::from_secs(5),
-        ..default()
-    })
-    .add_plugin(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default()); // */
+    app.add_plugins((
+        bevy::diagnostic::LogDiagnosticsPlugin {
+            wait_duration: std::time::Duration::from_secs(5),
+            ..default()
+        },
+        bevy::diagnostic::FrameTimeDiagnosticsPlugin::default(),
+    ));     // */
 
-    app
-    .add_plugin(RapierPhysicsPlugin::<NoUserData>::default()
-        .with_default_system_setup(false))
-
-    .add_plugin(player::PlayerPlugin)
-    .add_plugin(gravity::GravityPlugin)
-    .add_plugin(gamestate::GameStatePlugin)
-    .add_plugin(networking::NetworkPlugin)
+    app.add_plugins((
+        RapierPhysicsPlugin::<NoUserData>::default()
+            .with_default_system_setup(false),
+        player::PlayerPlugin,
+        gravity::GravityPlugin,
+        gamestate::GameStatePlugin,
+        networking::NetworkPlugin,
+    ))
     
-    .add_system(bevy::window::close_on_esc)
+    .add_systems(Update,bevy::window::close_on_esc)
 
     .run();
 }

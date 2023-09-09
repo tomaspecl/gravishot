@@ -18,7 +18,7 @@ impl Plugin for GravityPlugin {
         .register_type::<AtractedByGravity>()
         .register_type::<CreatesGravity>()
         .register_type::<GravityVector>()
-        .add_system(marker_system);
+        .add_systems(Update,marker_system);
     }
 }
 

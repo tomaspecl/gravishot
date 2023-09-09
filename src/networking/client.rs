@@ -24,7 +24,7 @@ pub fn handle(
     mut players: ResMut<super::PlayerMap>,
     //mut net_config: ResMut<super::NetConfig>,
     mut commands: Commands,
-
+    mut state: ResMut<NextState<crate::gamestate::GameState>>,
     mut snapshots: ResMut<Snapshots<MyState>>,
     mut inputs: ResMut<Inputs>,
 ) {
@@ -37,7 +37,7 @@ pub fn handle(
                 commands.insert_resource(super::LocalPlayer(player));
                 commands.insert_resource(map);
                 commands.insert_resource(snapshots);
-                commands.insert_resource(iyes_loopless::state::NextState(crate::gamestate::GameState::Running));
+                state.set(crate::gamestate::GameState::Running);
             },
             ServerMessage::Connected(player, rollback) => {
                 println!("Player {} connected with rollback {}",player.0,rollback.0);
@@ -246,12 +246,7 @@ pub fn connect(mut client: ResMut<Client>, myconfig: Res<super::NetConfig>) {
     println!("socket: {addr}");
 
     client.open_connection(
-        ConnectionConfiguration::new(
-            addr.ip().to_string(),
-            addr.port(),
-            "0.0.0.0".to_string(),
-            0
-        ),
+        ConnectionConfiguration::from_addrs(addr,str::parse("0.0.0.0:0").unwrap()),
         CertificateVerificationMode::SkipVerification,
     ).unwrap();
 }

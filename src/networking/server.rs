@@ -9,7 +9,7 @@ use super::{ClientMessage, ServerMessage, NetConfig};
 use bevy::prelude::*;
 
 use bevy::utils::Entry;
-use bevy_quinnet::{server::{Server, ServerConfigurationData, certificate::CertificateRetrievalMode, ConnectionLostEvent, ConnectionEvent}, shared::channel::ChannelId};
+use bevy_quinnet::{server::{Server, ServerConfiguration, certificate::CertificateRetrievalMode, ConnectionLostEvent, ConnectionEvent}, shared::channel::ChannelId};
 
 use std::{net::ToSocketAddrs, sync::atomic::{AtomicU64, Ordering}};
 
@@ -205,11 +205,9 @@ pub fn start(
     let addr = config.ip_port.to_socket_addrs().unwrap().next().unwrap();
     println!("socket: {addr}");
     server.start_endpoint(
-        ServerConfigurationData::new(
-            addr.ip().to_string(),
-            addr.port(),
-            "0.0.0.0".to_string()
-        ),
-        CertificateRetrievalMode::GenerateSelfSigned,
+        ServerConfiguration::from_addr(addr),
+        CertificateRetrievalMode::GenerateSelfSigned {
+            server_hostname: "GraviShot server".to_string(),    //TODO: allow manually setting this
+        },
     ).unwrap();
 }

@@ -52,7 +52,7 @@ impl Plugin for PlayerPlugin {
 //he has something like magnetic boots, player sticks to the surface he walks on
 //sticking to surfaces can be made by calculating normal to the mesh triangle in contact and only allowing movement perpendicular
 //to the normal, when player gets out of the mesh triangle then another one has to be found by intersecting player axis (up) with the mesh
-#[derive(Component, Reflect, FromReflect, Default, Serialize, Deserialize, Hash, PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(Component, Reflect, Default, Serialize, Deserialize, Hash, PartialEq, Eq, Clone, Copy, Debug)]
 pub struct Player(pub u64);
 
 #[derive(Component, Reflect)]

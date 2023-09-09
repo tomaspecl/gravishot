@@ -9,10 +9,10 @@ use crate::networking::{ClientMessage, LocalPlayer, rollback::Inputs};
 
 use bevy::prelude::*;
 
-use bevy_egui::{egui,EguiContext};
+use bevy_egui::{egui,EguiContexts};
 
 pub fn ui(
-    mut ctx: ResMut<EguiContext>,
+    mut ctx: EguiContexts,
     mut inputs: ResMut<Inputs>,
     local_player: Res<LocalPlayer>,
     server: Option<Res<ServerMarker>>,

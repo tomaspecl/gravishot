@@ -11,6 +11,7 @@ use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
 use bevy::ecs::query::WorldQuery;
+use bevy::ecs::schedule::ScheduleLabel;
 use bevy::utils::{HashMap, Entry};
 use circular_buffer::CircularBuffer;
 use serde::{Serialize, Deserialize};
@@ -273,45 +274,14 @@ impl Eq for MyState {}
 pub struct Inputs(pub HashMap<Player, Input>);
 
 /// Entities with this component will be afected by rollback
-#[derive(Component, Reflect, FromReflect, Serialize, Deserialize, Hash, PartialEq, Eq, Clone, Copy)]
+#[derive(Component, Reflect, Serialize, Deserialize, Hash, PartialEq, Eq, Clone, Copy)]
 pub struct Rollback(pub u64);
 
-pub enum RollbackStages {
-    CorePreUpdate,
-    CoreUpdate,
-    PhysicsStagesSyncBackend,
-    PhysicsStagesStepSimulation,
-    PhysicsStagesWriteback,
-    CorePostUpdate,
-    PhysicsStagesDetectDespawn,
-    //CoreLast,
-    /// DO NOT USE! The total amount of variants of this enum, used when creating Vec<SystemStage>
-    TotalDoNotUse
-}
-
-#[derive(Resource)]
-pub struct RollbackStagesStorage(Vec<SystemStage>);
-
-impl RollbackStagesStorage {
-    pub fn new() -> Self {
-        Self((0..RollbackStages::TotalDoNotUse as usize).map(|_| SystemStage::parallel()).collect())
-    }
-    pub fn get(&mut self, label: RollbackStages) -> &mut SystemStage {
-        &mut self.0[label as usize]
-    }
-}
-
-pub fn run_update(world: &mut World) {
-    world.resource_scope(|world, mut stages:Mut<RollbackStagesStorage>| {
-        for stage in 0..RollbackStages::TotalDoNotUse as usize {
-            //stages.0[stage].apply_buffers(world);   //TODO: is this correct? or put it after run()? or is it called automatically in run()?
-            stages.0[stage].run(world);
-        }
-    });
-}
+#[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
+pub struct RollbackSchedule;
 
 //gets called after normal systems handle networking and player inputs and modify Snapshots
-pub fn rollback_schedule<S: Restore>(world: &mut World) {
+pub fn run_rollback_schedule<S: Restore>(world: &mut World) {
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH).expect("since UNIX_EPOCH")
         .as_millis();
@@ -353,7 +323,7 @@ pub fn rollback_schedule<S: Restore>(world: &mut World) {
                     needs_restore = true;
 
                     snapshot.restore(world);
-                    run_update(world);
+                    world.run_schedule(RollbackSchedule);
                     let next_snapshot = snapshots.buffer.get_mut(i+1)
                         .expect("index i is always < length-2");
                     next_snapshot.modified = true;
@@ -369,7 +339,7 @@ pub fn rollback_schedule<S: Restore>(world: &mut World) {
             if needs_restore {  //TODO: can this be instead checked by snapshot.modified?
                 snapshot.restore(world);
             }
-            run_update(world);
+            world.run_schedule(RollbackSchedule);
             let next_snapshot = snapshots.buffer.back_mut()
                 .expect("should contain at least one Snapshot");
             next_snapshot.modified = false;

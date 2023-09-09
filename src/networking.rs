@@ -98,8 +98,10 @@ impl Plugin for NetworkPlugin {
         .register_type::<Rollback>()
         .register_type::<rollback::Inputs>()
         //.register_type::<Snapshots::<MyState>>()
-        .add_plugin(bevy_quinnet::client::QuinnetClientPlugin::default())
-        .add_plugin(bevy_quinnet::server::QuinnetServerPlugin::default());
+        .add_plugins((
+            bevy_quinnet::client::QuinnetClientPlugin::default(),
+            bevy_quinnet::server::QuinnetServerPlugin::default(),
+        ));
     }
 }
 

@@ -20,27 +20,28 @@ pub fn is_first_person(control: Res<PlayerControl>) -> bool {
     control.first_person
 }
 
-pub fn center_cursor(mut windows: ResMut<Windows>) {
-    let window = windows.get_primary_mut().unwrap();
-    window.set_cursor_position(Vec2::new(window.width()/2.0,window.height()/2.0));
+pub fn center_cursor(mut window_query: Query<&mut Window, With<bevy::window::PrimaryWindow>>) {
+    let mut window = window_query.single_mut();
+    let pos = Vec2::new(window.width()/2.0,window.height()/2.0);
+    window.set_cursor_position(Some(pos));
 }
 
 pub fn change_player_control(
     input: Res<Input<MouseButton>>,
-    mut windows: ResMut<Windows>,
+    mut window_query: Query<&mut Window, With<bevy::window::PrimaryWindow>>,
     mut control: ResMut<PlayerControl>,
     player: Query<Entity, With<super::LocalPlayer>>,
     mut camera: Query<(&mut Transform, &Parent), With<Camera>>,
 ) {
     use bevy::window::CursorGrabMode;
-    let window = windows.primary_mut();
+    let mut window = window_query.single_mut();
     
     if input.just_pressed(MouseButton::Middle) {
         control.first_person = !control.first_person;
         if control.first_person {
-            window.set_cursor_grab_mode(CursorGrabMode::Locked);
+            window.cursor.grab_mode = CursorGrabMode::Locked;
         }else{
-            window.set_cursor_grab_mode(CursorGrabMode::None);
+            window.cursor.grab_mode = CursorGrabMode::None;
         }
         let player = player.get_single().unwrap();
         for (mut transform,parent) in camera.iter_mut() {

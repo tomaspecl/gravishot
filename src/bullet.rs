@@ -72,10 +72,10 @@ pub fn make_bullet(event: SpawnBullet, entity: Option<Entity>) -> impl Fn(&mut W
 
     move |world: &mut World| {
         let mesh = world.resource_mut::<Assets<Mesh>>() //TODO: cache mesh and material handles
-            .add(Mesh::from(shape::Icosphere {
+            .add(Mesh::try_from(shape::Icosphere {
                 radius,
                 subdivisions: 5,
-            }));
+            }).unwrap());
         let material = world.resource_mut::<Assets<StandardMaterial>>()
             .add(StandardMaterial {
                 base_color: Color::RED,
@@ -95,6 +95,7 @@ pub fn make_bullet(event: SpawnBullet, entity: Option<Entity>) -> impl Fn(&mut W
         bullet.insert((
             Bullet,
             RigidBody::Dynamic,
+            Ccd::enabled(),
             velocity,
             AtractedByGravity(0.1),
             SpatialBundle {

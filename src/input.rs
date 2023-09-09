@@ -23,7 +23,7 @@ fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Butt
 }
 
 /// Input from one player for one frame
-#[derive(Reflect, FromReflect, Default, Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
+#[derive(Reflect, Default, Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
 pub struct Input {
     /// Contains data about pressed keys and mouse buttons
     #[serde(serialize_with = "serialize")]
@@ -40,7 +40,7 @@ enum I {
 
 type ButtonsSize = u16;
 #[bitmask(u16)]
-#[derive(Reflect, FromReflect)]
+#[derive(Reflect)]
 pub enum Buttons {
     W,
     S,
@@ -57,7 +57,7 @@ impl Default for Buttons { fn default() -> Self { Self::none() } }
 
 pub const MOUSE_SCALE: f32 = 100.0;
 
-#[derive(Reflect, FromReflect, Default, Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
+#[derive(Reflect, Default, Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
 pub struct MouseDelta {
     pub deltas: Vec<(i16,i16)>,  //TODO: optimize size, possibly by combining all deltas into a single delta with the same effect?
 }
@@ -68,18 +68,16 @@ impl Buttons {
     }
     fn set_i(&mut self, button: I, control: &PlayerControl) {
         use self::I::{K, M};
-        use MouseButton::Left;
-        use KeyCode::*;
         self.bits |= match button {
-            M(Left) if control.first_person => Buttons::Shoot,
-            K(W)        => Buttons::W,
-            K(S)        => Buttons::S,
-            K(A)        => Buttons::A,
-            K(D)        => Buttons::D,
-            K(Q)        => Buttons::Q,
-            K(E)        => Buttons::E,
-            K(LShift)   => Buttons::Shift,
-            K(Space)    => Buttons::Space,
+            M(MouseButton::Left) if control.first_person => Buttons::Shoot,
+            K(KeyCode::W)        => Buttons::W,
+            K(KeyCode::S)        => Buttons::S,
+            K(KeyCode::A)        => Buttons::A,
+            K(KeyCode::D)        => Buttons::D,
+            K(KeyCode::Q)        => Buttons::Q,
+            K(KeyCode::E)        => Buttons::E,
+            K(KeyCode::ShiftLeft)   => Buttons::Shift,
+            K(KeyCode::Space)    => Buttons::Space,
             //K()        => Buttons::,
             _ => Buttons::none()
         }.bits;

@@ -23,17 +23,16 @@ opt-level = 3
 #lto = "thin"
 
 [dependencies]
-bevy = { version = "0.9" }
+bevy = { version = "0.11" }
 rand = "0.8.4"
-bevy_rapier3d = { version = "0.20", features = ["debug-render","serde-serialize"] }
-bevy-inspector-egui = "0.17"
+bevy_rapier3d = { version = "0.22", features = ["debug-render","serde-serialize"] }
+bevy-inspector-egui = "0.19"
 #bevy-inspector-egui-rapier = { version = "0.3", features = ["rapier3d"] }
 #bevy_editor_pls = { git = "https://github.com/jakobhellermann/bevy_editor_pls.git" }
-bevy_embedded_assets = { version = "0.6", optional = true }
+bevy_embedded_assets = { version = "0.8", optional = true }
 serde = "1"
-bevy_egui = "0.19"
-iyes_loopless = "0.9"
+bevy_egui = "0.21"
 once_cell = "1.17"
 circular-buffer = "0.1.1"
-bevy_quinnet = "0.3.0"
+bevy_quinnet = "0.5"
 bitmask-enum = "2"

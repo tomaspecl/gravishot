@@ -10,7 +10,6 @@ use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
 use bevy::gltf::{Gltf, GltfMesh, GltfPrimitive};
-use iyes_loopless::prelude::*;
 
 #[derive(Resource)]
 pub struct AsteroidAssets {
@@ -129,6 +128,7 @@ pub fn start_loading(
 
 pub fn wait_for_load(
     mut commands: Commands,
+    mut next_state: ResMut<NextState<crate::gamestate::GameState>>,
     server: Res<AssetServer>,
     mut new_mat: ResMut<Assets<StandardMaterial>>,
     handle: Option<Res<AssetsLoading>>,
@@ -176,7 +176,7 @@ pub fn wait_for_load(
 
                 for mesh in gltf.meshes.iter() {
                     let mesh = a_gmesh.get(mesh).unwrap();
-                    for GltfPrimitive {mesh,material} in &mesh.primitives {
+                    for GltfPrimitive {mesh,material, extras: _, material_extras: _} in &mesh.primitives {
                         println!("loading asteroid");
                         let mesh_handle = mesh.clone();
                         let mesh = a_mesh.get(&mesh_handle).unwrap();
@@ -195,7 +195,7 @@ pub fn wait_for_load(
                     asteroids,
                 });
 
-                commands.insert_resource(NextState(crate::gamestate::GameState::LoadingDone));
+                next_state.set(crate::gamestate::GameState::LoadingDone);
             },
             LoadState::Failed | LoadState::Unloaded => panic!("Could not load asteroid assets"),
             _ => ()

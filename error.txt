@@ -1,15 +1,5 @@
-Connection 1 connected with status: "Connection"
-←[2m2022-05-25T16:33:11.381220Z←[0m ←[31mERROR←[0m ←[2mcarrier_pigeon::server←[0
-m←[2m:←[0m TCP(1): IO error occurred while receiving data. The header of a recei
-ved message indicates a size of 43586,but the max allowed message size is 2048.c
-arrier-pigeon never sends a message greater than this; this message was likely n
-ot sent by carrier-pigeon. This will cause issues when trying to read; Discardin
-g this message and closing connection.
-←[2m2022-05-25T16:33:11.382220Z←[0m ←[31mERROR←[0m ←[2mbevy_pigeon::app←[0m←[2m:
-←[0m Software v hostitelském počítači ukončil vytvořené připojení. (os error 100
-53)
-Connection 1 disconnected with status: "Dropped with error The header of a recei
-ved message indicates a size of 43586,but the max allowed message size is 2048.c
-arrier-pigeon never sends a message greater than this; this message was likely n
-ot sent by carrier-pigeon. This will cause issues when trying to read; Discardin
-g this message and closing connection."
+thread 'main' panicked at 'error[B0003]: Could not insert a bundle (of type `bevy_rapier3d::dynamics::rigid_body::RapierRigidBodyHandle`) for entity 459v4 because it doesn't exist in this World.', /home/tomas/.cargo/registry/src/index.crates.io-6f17d22bba15001f/bevy_ecs-0.11.2/src/system/commands/mod.rs:957:13
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+Encountered a panic when applying buffers for system `bevy_rapier3d::plugin::systems::init_rigid_bodies`!
+Encountered a panic in exclusive system `gravishot::networking::rollback::run_rollback_schedule<gravishot::networking::rollback::MyState>`!
+Encountered a panic in system `bevy_app::main_schedule::Main::run_main`!
