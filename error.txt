@@ -1,3 +1,5 @@
+This happened after client connected to server. Some bullets were spawned on the server before it. The server crashed.
+
 thread 'main' panicked at 'error[B0003]: Could not insert a bundle (of type `bevy_rapier3d::dynamics::rigid_body::RapierRigidBodyHandle`) for entity 459v4 because it doesn't exist in this World.', /home/tomas/.cargo/registry/src/index.crates.io-6f17d22bba15001f/bevy_ecs-0.11.2/src/system/commands/mod.rs:957:13
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 Encountered a panic when applying buffers for system `bevy_rapier3d::plugin::systems::init_rigid_bodies`!
