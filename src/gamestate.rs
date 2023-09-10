@@ -135,11 +135,10 @@ impl Plugin for GameStatePlugin {
                 ),
                 apply_deferred,
                 (   //CoreUpdate
-                    player::display_events,
-                    player::stand_up.after(player::display_events),
-                    player::player_control::movement_system.after(player::display_events),
+                    //player::display_events,
+                    //player::stand_up.after(player::display_events),
+                    (gravity::gravity_system,player::player_control::movement_system/*.after(player::display_events)*/).chain(),
                     player::player_control::read_result_system,
-                    gravity::gravity_system,
                 ),
                 apply_deferred,
                 (   //CorePostUpdate

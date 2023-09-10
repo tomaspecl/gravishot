@@ -21,10 +21,20 @@ pub const CAMERA_1ST_PERSON: Lazy<Transform> = Lazy::new(|| Transform {
     ..Transform::IDENTITY
 });
 
-pub const CAMERA_3RD_PERSON: Lazy<Transform> = Lazy::new(|| Transform {
+/*pub const CAMERA_3RD_PERSON: Lazy<Transform> = Lazy::new(|| Transform {
     translation: Vec3::new(0.0,1.0,0.7),
     rotation: {
         let angle: f32 = -0.7;
+        let (s, c) = (angle * 0.5).sin_cos();
+        Quat::from_xyzw(s, 0.0, 0.0, c)
+    },
+    ..Transform::IDENTITY
+});*/
+
+pub const CAMERA_3RD_PERSON: Lazy<Transform> = Lazy::new(|| Transform {
+    translation: Vec3::new(0.0,0.0,7.0),
+    rotation: {
+        let angle: f32 = 0.0;
         let (s, c) = (angle * 0.5).sin_cos();
         Quat::from_xyzw(s, 0.0, 0.0, c)
     },
@@ -42,8 +52,10 @@ impl Plugin for PlayerPlugin {
         .register_type::<player_control::PlayerControl>()
         .insert_resource(player_control::PlayerControl {
             first_person: false,
-            sensitivity: 0.3,
-        });
+            sensitivity: 0.2,
+        })
+        .register_type::<player_control::PlayerPhysicsConstants>()
+        .init_resource::<player_control::PlayerPhysicsConstants>();
     }
 }
 
@@ -128,9 +140,10 @@ pub fn make_player(event: SpawnPlayer, entity: Option<Entity>) -> impl Fn(&mut W
             RigidBody::Dynamic,
             Velocity::default(),
             ExternalForce::default(),
+            ExternalImpulse::default(),
             Damping {
                 linear_damping: 0.0,
-                angular_damping: 1.0,
+                angular_damping: 10.0,
             },
             AtractedByGravity(0.1),
             GravityVector(Vec3::ZERO),
@@ -161,19 +174,24 @@ pub fn make_player(event: SpawnPlayer, entity: Option<Entity>) -> impl Fn(&mut W
                 ..default()
             });
     
+            //for collisions with terrain
             parent.spawn((
                 Collider::capsule_y((height-2.0*radius)/2.0, radius),
-                Restitution::coefficient(0.7),
+                Restitution {
+                    coefficient: 0.0,
+                    combine_rule: CoefficientCombineRule::Multiply,
+                },
                 Friction::coefficient(0.1),
                 ColliderMassProperties::Density(1.0),
             ));
-    
-            let scale = 4.0;
+            
+            //TODO: for collisions with projectiles, should correspond to mesh
+            /*let scale = 4.0;
             parent.spawn((
                 Collider::capsule_y((height-2.0*radius)/2.0*scale, radius*scale),
                 Sensor,
                 ActiveEvents::COLLISION_EVENTS,
-            ));
+            ));*/
         });
     }
 }
@@ -186,19 +204,7 @@ pub fn despawn_player (player_to_despawn: Player) -> impl Fn(&mut World) {
     }
 }
 
-pub fn stand_up(
-    mut local_player: Query<(&Standing,&Transform,&GravityVector,&mut ExternalForce),With<Player>>,
-) {
-    for (standing,transform,vector,mut force) in local_player.iter_mut() {
-        if standing.0 {
-            let torque = vector.0.normalize().cross(transform.up());
-            force.torque = torque * 10.0;
-            //controller.up = -vector.0.normalize();
-        }
-    }
-}
-
-pub fn display_events(
+/*pub fn display_events(
     mut collision_events: EventReader<CollisionEvent>,
     context: Res<RapierContext>,
     colliders: Query<&Parent,(With<Collider>,With<Sensor>)>,
@@ -220,15 +226,15 @@ pub fn display_events(
 
         let interactions: Vec<_> = context.intersections_with(collider).collect();
         //println!("interaction {:?}",interactions);
-        if let Ok(mut player) = players.get_mut(player) {
+        if let Ok(mut standing) = players.get_mut(player) {
             if interactions.iter().any(|(_e1,_e2,touches)| *touches) {
-                player.0 = true;
+                standing.0 = true;
             }else{
-                player.0 = false;
+                standing.0 = false;
             }
         }
     }
-}
+}*/
 
 pub fn local_player_exists(
     query: Query<(), With<LocalPlayer>>,

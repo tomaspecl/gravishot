@@ -54,8 +54,11 @@ pub fn generate_map(
 ) {
     let mut asteroids = Vec::new();
 
-    for _ in 0..10 {
+    /*for _ in 0..10 {
         asteroids.push(AsteroidInstance::new(None, None, &assets));
+    }*/
+    for _ in 0..1 {
+        asteroids.push(AsteroidInstance::new(Some(Transform::from_scale(Vec3::new(4.0, 3.0, 4.0)*5.0)), Some(0), &assets));
     }
 
     commands.insert_resource(Map {
