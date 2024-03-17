@@ -1,5 +1,5 @@
 // Gravishot
-// Copyright (C) 2023 Tomáš Pecl
+// Copyright (C) 2024 Tomáš Pecl
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
