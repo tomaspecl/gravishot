@@ -3,15 +3,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::input::Input;
-use crate::player::Player;
-use super::rollback::{SnapshotRef, SnapshotType, Snapshot, Snapshots, Inputs, MyState};
+use crate::input::UpdateInputEvent;
+use super::rollback::*;
+use super::rollback::State;
 use super::{ClientMessage, ServerMessage};
+
+use bevy_gravirollback::new::*;
 
 use bevy::prelude::*;
 
-use bevy::utils::{Entry, HashMap};
-use bevy_quinnet::{client::{Client, connection::ConnectionConfiguration, certificate::CertificateVerificationMode}, shared::channel::ChannelId};
+use bevy::utils::Entry;
+use bevy_quinnet::client::{Client, connection::ConnectionConfiguration, certificate::CertificateVerificationMode};
 
 use std::net::ToSocketAddrs;
 
@@ -20,23 +22,41 @@ pub struct ClientMarker;
 
 pub fn handle(
     mut client: ResMut<Client>,
-    local_player: Option<Res<super::LocalPlayer>>,      //TODO: can this fail?
+    //local_player: Option<Res<super::LocalPlayer>>,      //TODO: can this fail?
     mut players: ResMut<super::PlayerMap>,
     //mut net_config: ResMut<super::NetConfig>,
     mut commands: Commands,
     mut state: ResMut<NextState<crate::gamestate::GameState>>,
-    mut snapshots: ResMut<Snapshots<MyState>>,
-    mut inputs: ResMut<Inputs>,
+
+    mut update_timer: ResMut<crate::gamestate::UpdateTimer>,
+
+    mut snapshot_info: ResMut<SnapshotInfo>,
+    mut input_event: EventWriter<UpdateInputEvent>,
+    mut state_event_writer: EventWriter<UpdateStateEvent<State>>,
+    mut rollback_map: ResMut<RollbackMap>,
 ) {
-    let now = snapshots.frame;
-    let local_player = local_player.map(|x| x.0);
     while let Some(msg) = client.connection_mut().try_receive_message::<ServerMessage>() {
         match msg {
-            ServerMessage::ConnectionGranted(player, map, snapshots) => {
+            //TODO: move ConnectionGranted in different GameState
+            ServerMessage::ConnectionGranted(player, map, states) => {
                 //TODO: move somewhere else (system set when ClientSetup) such that this system does not need ResMut<NetConfig>?
+
+                ROLLBACK_ID_COUNTER.0.store((player.0 << 32).into(), std::sync::atomic::Ordering::SeqCst);
+
                 commands.insert_resource(super::LocalPlayer(player));
                 commands.insert_resource(map);
-                commands.insert_resource(snapshots);
+                
+                //TODO: sync our frame number with the server
+                let last = states.last_frame;
+                let frame_0_time = states.frame_0_time;
+                update_timer.frame_0_time = frame_0_time;
+
+                snapshot_info.last = last;
+                snapshot_info.current = last;
+                let index = snapshot_info.index(last);
+                snapshot_info.snapshots[index].frame = last;
+                println!("client connected player {player:?} last frame {}", snapshot_info.last);
+
                 state.set(crate::gamestate::GameState::Running);
             },
             ServerMessage::Connected(player, rollback) => {
@@ -62,38 +82,46 @@ pub fn handle(
             ServerMessage::DespawnPlayer(player) => {
                 event_despawn.send(crate::player::DespawnPlayerEvent(player));
             },*/
-            ServerMessage::Input(frame, player, input) => {
-                match SnapshotRef::new(now, frame, &mut snapshots, &mut inputs) {
-                    SnapshotType::Past(snapshot) | SnapshotType::Now(snapshot) => {
-                        snapshot.inputs.0.entry(player).insert(input);
-                        *snapshot.modified = true;
-                    },
-                    SnapshotType::Future { now: _ } => {
-                        //future snapshot
-                        commands.insert_resource(super::rollback::FuturePastSnapshot::<MyState> {
-                            snapshot: Snapshot {
-                                inputs: Inputs(HashMap::from([(player,input)])),
-                                ..default()
-                            },
-                            frame,
-                        });
-                        return;
-                    },
-                    SnapshotType::SuperPast => ()   //TODO: slow down?
-                }
+            ServerMessage::Input(update_input_event) => {
+                //println!("server message input frame {frame} player {player:?}");
+                input_event.send(update_input_event);
             },
-            ServerMessage::SlowDown(frame) => {
-                if now>frame {
+            ServerMessage::SlowDown(_frame) => {
+                todo!()
+                /*if now>frame {
                     //past snapshot
                     commands.insert_resource(super::rollback::FuturePastSnapshot::<MyState> {
                         frame,
                         snapshot: Snapshot::default()
                     });
-                }
+                }*/
             }
-            ServerMessage::StateSummary(frame, mut snapshot_summary, players_summary) => {
-                println!("got summary");
-                *players = players_summary;
+            ServerMessage::StateSummary(frame, snapshot_summary, players_summary) => {
+                let current = snapshot_info.current;
+                let diff = current as i64 - frame as i64;
+                println!("got summary frame {frame} current {current} diff {diff}");
+                *players = players_summary; //TODO: this might not be enough
+
+                let inputs = snapshot_summary.inputs.0;
+                let states = snapshot_summary.states;
+
+                let mut deleted = Vec::new();
+                for (id, &entity) in &rollback_map.0 {
+                    if !states.contains_key(id) {
+                        //println!("got summary despawning {entity:?}");
+                        commands.entity(entity).despawn_recursive();
+                        deleted.push(entity);
+                    }
+                }
+                for e in deleted {
+                    rollback_map.remove(e);
+                }
+
+                input_event.send_batch(inputs.into_iter().map(|(player, input)| UpdateInputEvent { frame, player, input }));
+                state_event_writer.send_batch(states.into_iter().map(|(id, state)| UpdateStateEvent {frame, id, state}));
+
+                /*
+                //TODO: move this into update event handler
                 let summary_states = &mut snapshot_summary.states;
                 let summary_inputs = &mut snapshot_summary.inputs.0;
                 let mut state_cor = None;
@@ -114,7 +142,7 @@ pub fn handle(
                         }
                     }
                 }
-                match SnapshotRef::new(now, frame, &mut snapshots, &mut inputs) {
+                match SnapshotRef::new(last_frame, frame, &mut snapshots, &mut inputs) {
                     SnapshotType::Past(my_snapshot) | SnapshotType::Now(my_snapshot) => {
                         let my_states = my_snapshot.states;
                         let my_inputs = &mut my_snapshot.inputs.0;
@@ -227,17 +255,10 @@ pub fn handle(
                 }
 
                 if should_return {return}
+                */
             },
         }
     }
-    let Some(player) = local_player else{return};
-    let Some(input) = inputs.0.get(&player) else{return};
-    if input.buttons.is_none() && input.mouse.deltas.is_empty() {return}
-    //println!("sending local input {}",input.buttons.bits());
-    let _ = client.connection().send_message_on(
-        ChannelId::UnorderedReliable,
-        ClientMessage::Input(now, input.clone())
-    ).map_err(|e| error!("try_send_on: {}", e));
 }
 
 pub fn connect(mut client: ResMut<Client>, myconfig: Res<super::NetConfig>) {
@@ -253,9 +274,9 @@ pub fn connect(mut client: ResMut<Client>, myconfig: Res<super::NetConfig>) {
 
 pub fn on_connect(
     mut events: EventReader<bevy_quinnet::client::connection::ConnectionEvent>,
-    client: ResMut<Client>
+    client: Res<Client>
 ) {
-    if let Some(connection) = events.iter().next() {
+    if let Some(connection) = events.read().next() {
         let client_id = connection.id;   //TODO: is this really client_id?
 
         println!("Joining with client_id {client_id}");

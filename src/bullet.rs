@@ -3,47 +3,52 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::input::Buttons;
-use crate::networking::rollback::{Rollback, Inputs};
+use crate::input::Inputs;
 use crate::gravity::AtractedByGravity;
-use crate::networking::server::ROLLBACK_ID_COUNTER;
 use crate::player::Player;
+
+use bevy_gravirollback::new::for_user::*;
+use bevy_gravirollback::new::*;
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
+use serde::{Serialize, Deserialize};
+
 #[derive(Component)]
 pub struct Bullet;
 
+#[derive(Reflect, Serialize, Deserialize, Clone)]
 pub struct SpawnBullet {
-    pub rollback: Rollback,
+    pub rollback: RollbackID,
     pub transform: Transform,
     pub velocity: Velocity,
+    pub index: Option<usize>,
 }
 
-//only on the server
 pub fn spawn_bullet_system(
-    inputs: Res<Inputs>,
     mut commands: Commands,
-    players: Query<(&Player, &Transform)>,
+    inputs: Res<Inputs>,
+    player_query: Query<(&Player, &Transform)>,
+    info: Res<SnapshotInfo>,
 ) {
-    for (&player,input) in inputs.0.iter() {
-        if input.buttons.contains(Buttons::Shoot) {
-            if let Some((_,transform)) = players.iter().find(|(&x,_)| x==player) {
-                let rollback = ROLLBACK_ID_COUNTER.get_new();
-                let mut transform = *transform;
+    for (&player, input) in inputs.0.iter() {
+        if let Some(shoot) = &input.signals.shoot {
+            if let Some((_, &transform)) = player_query.iter().find(|(&x,_)| x==player) {
+                let rollback = shoot.id;
+                let mut transform = transform;
                 let forward = transform.forward();
                 transform.translation += forward * 0.5; //TODO: move magic numbers to constants
-
-                println!("spawning bullet {}",rollback.0);
+        
+                println!("spawning bullet {} player {player:?} frame {} last {}",rollback.0, info.current, info.last);
                 let velocity = Velocity::linear(forward * 50.0);
-                let event = SpawnBullet {
+                let spawn = SpawnBullet {
                     rollback,
                     transform,
                     velocity,
+                    index: None,
                 };
-                commands.add(make_bullet(event, None));
-
+                commands.add(spawn3(make_bullet(spawn)))
             }else{
                 warn!("player is shooting but is not spawned!");
             }
@@ -51,32 +56,41 @@ pub fn spawn_bullet_system(
     }
 }
 
-//only on the server
 pub fn despawn_bullet_system(
-    mut commands: Commands,
-    bullets: Query<(Entity, &Transform, &Velocity), With<Bullet>>,
+    mut bullets: Query<(&mut Exists, &Transform, &Velocity), With<Bullet>>,
 ) {
-    for (bullet,transform,velocity) in bullets.iter() {
+    for (mut exists, transform, velocity) in bullets.iter_mut() {
         if transform.translation.length()>200.0 || velocity.linvel.length()<1.0 {
-            commands.entity(bullet).despawn_recursive();
+            exists.0 = false;
         }
     }
 }
 
-pub fn make_bullet(event: SpawnBullet, entity: Option<Entity>) -> impl Fn(&mut World) {
+pub fn make_bullet(event: SpawnBullet) -> impl Fn(ResMut<Assets<Mesh>>, ResMut<Assets<StandardMaterial>>, Commands) -> Entity {
     let radius = 0.1;
 
     let rollback = event.rollback;
     let transform = event.transform;
     let velocity = event.velocity;
 
-    move |world: &mut World| {
-        let mesh = world.resource_mut::<Assets<Mesh>>() //TODO: cache mesh and material handles
+    move |mut mesh_assets, mut material_assets, mut commands| {
+        //TODO: this is hacky
+        let mut physics_bundle = Rollback::<crate::networking::rollback::PhysicsBundle>::default();
+        let mut exists = Rollback::<Exists>::default();
+        if let Some(index) = event.index {
+            physics_bundle.0[index] = crate::networking::rollback::PhysicsBundle {
+                transform,
+                velocity,
+            };
+            exists.0[index] = Exists(true);
+        }
+
+        let mesh = mesh_assets  //TODO: cache mesh and material handles
             .add(Mesh::try_from(shape::Icosphere {
                 radius,
                 subdivisions: 5,
             }).unwrap());
-        let material = world.resource_mut::<Assets<StandardMaterial>>()
+        let material = material_assets
             .add(StandardMaterial {
                 base_color: Color::RED,
                 perceptual_roughness: 0.3,
@@ -84,27 +98,21 @@ pub fn make_bullet(event: SpawnBullet, entity: Option<Entity>) -> impl Fn(&mut W
                 ..default()
             });
 
-        let mut bullet = if let Some(entity) = entity {
-            world.entity_mut(entity)
-        }else{
-            world.spawn_empty()
-        };
-
-        //println!("spawning bullet {:?} rollback {}",bullet.id(),rollback.0);
-
-        bullet.insert((
-            Bullet,
+        commands.spawn((
+            (Bullet,
             RigidBody::Dynamic,
             Ccd::enabled(),
-            velocity,
-            AtractedByGravity(0.1),
             SpatialBundle {
                 transform,
                 ..default()
             },
-            
+            physics_bundle,
+            exists,
+            Exists(true),
+            velocity,
+            AtractedByGravity(0.1),
             rollback,
-            crate::networking::EntityType::Bullet,
+            crate::networking::EntityType::Bullet,),
 
             Collider::ball(radius),
             Restitution::coefficient(0.7),
@@ -116,15 +124,12 @@ pub fn make_bullet(event: SpawnBullet, entity: Option<Entity>) -> impl Fn(&mut W
                 linear_damping: 0.0,
                 angular_damping: 1.0,
             },
-        ));
-        
-        bullet
-        .with_children(|parent| {
+        )).with_children(|parent| {
             parent.spawn(PbrBundle {
                 mesh,
                 material,
                 ..default()
             });
-        });
+        }).id()
     }
 }

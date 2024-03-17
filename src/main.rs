@@ -9,6 +9,7 @@ mod gamestate;
 mod networking;
 mod map;
 mod input;
+mod spawning;
 mod bullet;
 
 use bevy::prelude::*;
@@ -26,13 +27,7 @@ fn main() {
             exit_condition: bevy::window::ExitCondition::DontExit,
             close_when_requested: true,
         })
-        .disable::<bevy::winit::WinitPlugin>()
-        .set(bevy::render::RenderPlugin {
-            wgpu_settings: bevy::render::settings::WgpuSettings {
-                backends: None,
-                ..default()
-            },
-        });
+        .disable::<bevy::render::RenderPlugin>();
     }else{
         default_plugins = default_plugins.set(WindowPlugin {
             primary_window: Some(Window {
@@ -84,10 +79,10 @@ fn main() {
     ));     // */
 
     app.add_plugins((
+        gravity::GravityPlugin,
         RapierPhysicsPlugin::<NoUserData>::default()
             .with_default_system_setup(false),
         player::PlayerPlugin,
-        gravity::GravityPlugin,
         gamestate::GameStatePlugin,
         networking::NetworkPlugin,
     ))
@@ -96,12 +91,21 @@ fn main() {
 
     .run();
 }
+fn setup_server(
+    mut update_timer: ResMut<gamestate::UpdateTimer>,
+) {
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap();
+    update_timer.frame_0_time = now;
+}
 
 fn setup(
     mut commands: Commands,
     asteroids: Res<map::asteroid::AsteroidAssets>,
     map: Res<map::Map>,
+    mut window: Query<&mut Window, With<bevy::window::PrimaryWindow>>,
 ) {
+    window.single_mut().present_mode = bevy::window::PresentMode::AutoNoVsync;
+
     commands.spawn(PointLightBundle {
         transform: Transform::from_xyz(4.0, 8.0, 4.0),
         point_light: PointLight::default(),

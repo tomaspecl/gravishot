@@ -5,10 +5,12 @@
 
 pub mod player_control;
 
-use crate::input::Buttons;
+use crate::input::Inputs;
 use crate::networking::PlayerMap;
-use crate::networking::rollback::{Rollback, Inputs};
 use crate::gravity::{AtractedByGravity, GravityVector};
+
+use bevy_gravirollback::new::*;
+use bevy_gravirollback::new::for_user::*;
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
@@ -73,72 +75,90 @@ pub struct LocalPlayer;
 #[derive(Component, Reflect, Clone, Copy)]
 pub struct Standing(pub bool);
 
-#[derive(Clone, Copy)]
+#[derive(Reflect, Serialize, Deserialize, Clone, Copy)]
 pub struct SpawnPlayer {
     pub player: Player,
-    pub rollback: Rollback,
+    pub rollback: RollbackID,
     pub transform: Transform,
+    pub velocity: Velocity,
+    pub index: Option<usize>,
 }
 
-//TODO: only run on server?
 pub fn spawn_player_system(
-    inputs: Res<Inputs>,
     mut commands: Commands,
+    inputs: Res<Inputs>,
+    player_query: Query<(&Player, &Transform)>,
     players: Res<PlayerMap>,
-    query: Query<&Player>,
 ) {
-    for (&player,input) in inputs.0.iter() {
-        if input.buttons.contains(Buttons::Spawn) {
-            if query.iter().find(|&&x| x==player).is_none() {
+    for (&player, input) in inputs.0.iter() {
+        if let Some(()) = input.signals.spawn {
+            if player_query.iter().find(|(&x, _)| x==player).is_none() {
                 println!("spawning player {}",player.0);
+        
                 let rollback = players.0[&player];
                 let transform = Transform::from_xyz(100.0,0.0,0.0);
-                let event = SpawnPlayer {
+                let velocity = Velocity::zero();
+                let spawn = SpawnPlayer {
                     player,
                     rollback,
                     transform,
+                    velocity,
+                    index: None,
                 };
-                commands.add(make_player(event, None));
+        
+                commands.add(spawn3(make_player(spawn)))
             }else{
                 warn!("player {} already exists",player.0);
+                continue
             }
         }
     }
+    
 }
 
-pub fn make_player(event: SpawnPlayer, entity: Option<Entity>) -> impl Fn(&mut World) {
+pub fn make_player(event: SpawnPlayer) -> impl Fn(Option<Res<crate::networking::LocalPlayer>>, ResMut<Assets<Mesh>>, ResMut<Assets<StandardMaterial>>, Commands) -> Entity {
     let height = 0.5;
     let radius = 0.125;
 
     let player_id = event.player;
     let rollback = event.rollback;
     let transform = event.transform;
+    let velocity = event.velocity;
 
-    move |world: &mut World| {
-        let local_player = world.get_resource::<crate::networking::LocalPlayer>().map(|x| x.0);
-        let mesh = world.resource_mut::<Assets<Mesh>>() //TODO: cache mesh and material handles
+    move |local_player, mut mesh_assets, mut material_assets, mut commands| {
+        let local_player = local_player.map(|x| x.0);
+
+        //TODO: this is hacky
+        let mut physics_bundle = Rollback::<crate::networking::rollback::PhysicsBundle>::default();
+        let mut exists = Rollback::<Exists>::default();
+        if let Some(index) = event.index {
+            physics_bundle.0[index] = crate::networking::rollback::PhysicsBundle {
+                transform,
+                velocity,
+            };
+            exists.0[index] = Exists(true);
+        }
+
+        let mesh = mesh_assets      //TODO: cache mesh and material handles
             .add(Mesh::from(shape::Capsule {
                 radius,
                 depth: height-2.0*radius,
                 ..default()
             }));
-        let material = world.resource_mut::<Assets<StandardMaterial>>()
+        let material = material_assets
             .add(Color::rgb(0.8, 0.7, 0.6).into());
-
-        let mut player = if let Some(entity) = entity {
-            world.entity_mut(entity)
-        }else{
-            world.spawn_empty()
-        };
-
-        player.insert((
+        
+        let mut player = commands.spawn((
             player_id,
             SpatialBundle {
                 transform,
                 ..default()
             },
             RigidBody::Dynamic,
-            Velocity::default(),
+            (physics_bundle,
+            exists,
+            Exists(true),),
+            velocity,
             ExternalForce::default(),
             ExternalImpulse::default(),
             Damping {
@@ -193,13 +213,15 @@ pub fn make_player(event: SpawnPlayer, entity: Option<Entity>) -> impl Fn(&mut W
                 ActiveEvents::COLLISION_EVENTS,
             ));*/
         });
+
+        player.id()
     }
 }
 
-pub fn despawn_player (player_to_despawn: Player) -> impl Fn(&mut World) {
+pub fn despawn_player(player_to_despawn: Player) -> impl Fn(&mut World) {
     move |world: &mut World| {
         if let Some((entity,_)) = world.query::<(Entity, &Player)>().iter(world).find(|(_,&player)| player==player_to_despawn) {
-            world.entity_mut(entity).despawn_recursive();
+            world.entity_mut(entity).despawn_recursive();   //TODO: maybe instead set Exists to false
         }
     }
 }

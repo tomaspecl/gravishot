@@ -1,7 +1,7 @@
 [package]
 name = "gravishot"
 version = "0.1.0"
-authors = ["tomaspecl <tomaspecl@email.cz>"]
+authors = ["Tomáš Pecl <tomaspecl@email.cz>"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -23,16 +23,17 @@ opt-level = 3
 #lto = "thin"
 
 [dependencies]
-bevy = { version = "0.11" }
+bevy = { version = "0.12" }
 rand = "0.8.4"
-bevy_rapier3d = { version = "0.22", features = ["debug-render","serde-serialize"] }
-bevy-inspector-egui = "0.19"
+bevy_rapier3d = { version = "0.24", features = ["debug-render","serde-serialize"] }
+bevy-inspector-egui = "0.22"
 #bevy-inspector-egui-rapier = { version = "0.3", features = ["rapier3d"] }
 #bevy_editor_pls = { git = "https://github.com/jakobhellermann/bevy_editor_pls.git" }
-bevy_embedded_assets = { version = "0.8", optional = true }
+bevy_embedded_assets = { version = "0.9", optional = true }
 serde = "1"
-bevy_egui = "0.21"
+bevy_egui = "0.24"
 once_cell = "1.17"
-circular-buffer = "0.1.1"
-bevy_quinnet = "0.5"
+bevy_quinnet = "0.6"
 bitmask-enum = "2"
+#bevy_gravirollback = { path = "../gravirollback", features = ["serialize"] }
+bevy_gravirollback = { git = "https://github.com/tomaspecl/bevy_gravirollback", rev = "89bd31ffc1be530a92a8fa8ce31ff60e75cb72b6", features = ["serialize"] }

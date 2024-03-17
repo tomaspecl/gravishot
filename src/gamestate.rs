@@ -8,8 +8,12 @@ mod spawn_menu;
 
 use crate::{map, player, networking, input, gravity, bullet};
 
+use bevy_gravirollback::new::*;
+
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
+
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 //new idea for representing game state:
 //multiple levels of state: 1. level is GameState, other levels define other state when in certain GameState
@@ -43,10 +47,10 @@ pub enum GameState {
 //}
 
 #[derive(SystemSet, Hash, Debug, PartialEq, Eq, Clone)]
-enum RollbackSet {
-    Input,
-    RunNetworking,
-    RunRollback,
+pub enum HandleIO {
+    LocalInput,
+    Networking,
+    ProcessChanges,
 }
 
 /// Registers systems specific to each [`GameState`] and other related state
@@ -58,6 +62,13 @@ impl Plugin for GameStatePlugin {
         //It will be replaced by Stageless RFC https://github.com/bevyengine/rfcs/pull/45
 
         app
+        .insert_resource({
+            UpdateTimer {
+                delay: gravity::PHYSICS_TIMESTEP_MS,
+                frame_0_time: Duration::from_secs(0),
+            }
+        })
+        .register_type::<UpdateTimer>()
 
         .add_state::<GameState>()
 
@@ -83,7 +94,11 @@ impl Plugin for GameStatePlugin {
                 change_state(GameState::Running),
             ).chain()
         )
-        .add_systems(OnExit(GameState::ServerSetup),crate::setup);
+        .add_systems(OnExit(GameState::ServerSetup),(crate::setup_server, crate::setup))
+
+        .configure_sets(Update,
+            (HandleIO::LocalInput, HandleIO::Networking, HandleIO::ProcessChanges).chain().in_set(RollbackProcessSet::HandleIO)
+        );
 
         //GameState::Running and rollback schedules
         if cfg!(not(feature="headless")) {
@@ -92,81 +107,124 @@ impl Plugin for GameStatePlugin {
                 (
                     player::player_control::change_player_control,
                     player::player_control::center_cursor.run_if(player::player_control::is_first_person),
+
                     (
-                        input::get_local_input,     //after clear input
-                        spawn_menu::ui              //after clear input
-                            .run_if(resource_exists::<networking::LocalPlayer>())
-                            .run_if(not(player::local_player_exists))
-                    ).in_set(RollbackSet::Input)
-                )
-                .run_if(in_state(GameState::Running))
+                        input::get_local_input.run_if(game_tick_condition),
+
+                        spawn_menu::ui.run_if(not(player::local_player_exists))
+                    ).in_set(HandleIO::LocalInput),
+
+                    (
+                        input::handle_local_input_event.run_if(game_tick_condition),
+                        /*(
+                            spawning::handle_local_spawn_event,
+                            spawning::handle_request_spawn_event.run_if(resource_exists::<networking::server::ServerMarker>()),
+                        ).chain(),*/
+                    ).in_set(HandleIO::Networking),
+                ).run_if(in_state(GameState::Running))
             );
         }
         
         app
-        .configure_sets(Update, (RollbackSet::Input,RollbackSet::RunNetworking,RollbackSet::RunRollback).chain())
-        .add_systems(Update,
+        .add_systems(Update,(   //TODO: put this into GameState::Running, client::handle part that handles connecting should be before GameState::Running
             (
                 //when server exists    TODO: move to server.rs ? or networking.rs ?
                 // Talks to all connected clients and syncs with them
-                networking::server::handle.run_if(resource_exists::<networking::server::ServerMarker>()),
+                (
+                    networking::server::handle,
+                    networking::server::send_state_summary,
+                ).run_if(resource_exists::<networking::server::ServerMarker>()),
                 //when client exists    TODO: move to client.rs ? or networking.rs ?
                 // Talks to the connected server and syncs with it
                 networking::client::handle.run_if(resource_exists::<networking::client::ClientMarker>()),
-            ).in_set(RollbackSet::RunNetworking)
-        );
+            ).in_set(HandleIO::Networking),
 
-        //.add_system(player::spawn_player_system
-        //    .run_in_state(GameState::Running)
-        //    .label(LabelUpdate::SpawnDespawn)
-        //    .after(LabelUpdate::PostInput))
+            (
+                (
+                    update_frame.run_if(game_tick_condition),
+                    (
+                        networking::rollback::clear_inputs,
+                        (
+                            input::handle_update_input_event,
+                            //spawning::handle_update_spawn_event,
+                        ),
+                    ).chain(),
+                    networking::rollback::handle_update_state_event,
+                ).in_set(HandleIO::ProcessChanges),
+            ).run_if(in_state(GameState::Running)),
+        ));
 
-        let mut schedule = Schedule::new();
-        schedule.add_systems(
+        app
+        .add_systems(RollbackSchedule,
             (
                 (   //CorePreUpdate
                     gravity::force_reset,
-                    player::spawn_player_system
-                        .run_if(resource_exists::<networking::server::ServerMarker>()),  //TODO: is it correct? 
-                    bullet::spawn_bullet_system
-                        .run_if(resource_exists::<networking::server::ServerMarker>()),
+                    //spawning::handle_spawns,
+                    player::spawn_player_system,
+                    bullet::spawn_bullet_system,
                     bullet::despawn_bullet_system
-                        .run_if(resource_exists::<networking::server::ServerMarker>()),
                 ),
                 apply_deferred,
                 (   //CoreUpdate
                     //player::display_events,
                     //player::stand_up.after(player::display_events),
-                    (gravity::gravity_system,player::player_control::movement_system/*.after(player::display_events)*/).chain(),
+                    (
+                        gravity::gravity_system,
+                        player::player_control::movement_system,
+                        //player::display_events,
+                    ).chain(),
                     player::player_control::read_result_system,
                 ),
                 apply_deferred,
                 (   //CorePostUpdate
-                    input::clear,
                     (
                         RapierPhysicsPlugin::<NoUserData>::get_systems(PhysicsSet::SyncBackend),
-                        RapierPhysicsPlugin::<NoUserData>::get_systems(PhysicsSet::SyncBackendFlush),
                         RapierPhysicsPlugin::<NoUserData>::get_systems(PhysicsSet::StepSimulation),
                         RapierPhysicsPlugin::<NoUserData>::get_systems(PhysicsSet::Writeback),
-                    )
-                    .chain()
-                    //.before(bevy::transform::TransformSystem::TransformPropagate)     //TODO: there is no TransformPropagate
+                        //bevy::transform::TransformSystem::TransformPropagate,  //TODO: there is no TransformPropagate
+                    ).chain(),
+                    bevy_rapier3d::plugin::systems::sync_removals,
                 )
+            ).chain().in_set(RollbackSet::Update)
+        )
+        /* .add_systems(Update,    //TODO: disable the default configuration by gravirollback plugin
+            (
+                apply_deferred,
+                bevy_gravirollback::new::systems::run_rollback_schedule_system,
+                apply_deferred,
             )
             .chain()
-        );
-
-        app.add_schedule(networking::rollback::RollbackSchedule, schedule)
-            .add_systems(Update,
-                (
-                    apply_deferred,
-                    networking::rollback::run_rollback_schedule::<networking::rollback::MyState>,
-                )
-                .chain()
-                .in_set(RollbackSet::RunRollback)
-                .run_if(in_state(GameState::Running))
-            );
+            .in_set(RollbackProcessSet::RunRollbackSchedule)
+            .run_if(in_state(GameState::Running))
+        )*/
+        .configure_sets(Update, RollbackProcessSet::RunRollbackSchedule.run_if(in_state(GameState::Running)));
     }
+}
+
+#[derive(Resource, Reflect, Default)]
+#[reflect(Resource)]
+pub struct UpdateTimer {
+    pub delay: u64,
+    pub frame_0_time: Duration,
+}
+
+fn game_tick_condition(
+    timer: Res<UpdateTimer>,
+    info: Res<SnapshotInfo>,
+) -> bool {
+    assert!(info.current==info.last);
+
+    let delay = timer.delay;
+    let frame0 = timer.frame_0_time;
+    let needed_frame = ((SystemTime::now().duration_since(UNIX_EPOCH).unwrap() - frame0).as_millis() / delay as u128) as u64;
+    if needed_frame > info.last {
+        true
+    }else{false}
+}
+
+fn update_frame(mut info: ResMut<SnapshotInfo>) {
+    let index = info.current_index();
+    info.snapshots[index].modified = true;
 }
 
 fn change_state<S: States>(state: S) -> impl Fn(ResMut<NextState<S>>) {

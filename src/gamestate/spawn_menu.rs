@@ -3,30 +3,21 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::input::Buttons;
-use crate::networking::server::ServerMarker;
-use crate::networking::{ClientMessage, LocalPlayer, rollback::Inputs};
-
 use bevy::prelude::*;
 
 use bevy_egui::{egui,EguiContexts};
 
 pub fn ui(
     mut ctx: EguiContexts,
-    mut inputs: ResMut<Inputs>,
-    local_player: Res<LocalPlayer>,
-    server: Option<Res<ServerMarker>>,
-    client: Res<bevy_quinnet::client::Client>,
+    //mut events: EventWriter<crate::spawning::LocalSpawnEvent>,
+    mut local_input: ResMut<crate::input::LocalInput>,
 ) {
     let ctx = ctx.ctx_mut();
 
     egui::CentralPanel::default().show(ctx, |ui| {
         if ui.button(egui::RichText::new("spawn").font(egui::FontId::proportional(40.0))).clicked() {
-            if server.is_some() {
-                inputs.0.entry(local_player.0).or_default().buttons.set(Buttons::Spawn);
-            }else{
-                client.connection().try_send_message(ClientMessage::RequestPlayer);
-            }
+            local_input.0.signals.spawn = Some(());
+            //events.send(crate::spawning::LocalSpawnEvent::Player);
         }
     });
 }

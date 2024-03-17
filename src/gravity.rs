@@ -6,6 +6,8 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
+pub const PHYSICS_TIMESTEP_MS: u64 = 1000/50;
+
 pub struct GravityPlugin;
 
 impl Plugin for GravityPlugin {
@@ -13,6 +15,7 @@ impl Plugin for GravityPlugin {
         app
         .insert_resource(RapierConfiguration {
             gravity: Vect::ZERO,
+            timestep_mode: TimestepMode::Fixed { dt: 0.001*PHYSICS_TIMESTEP_MS as f32, substeps: 1 },
             ..default()
         })
         .register_type::<AtractedByGravity>()

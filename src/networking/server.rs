@@ -3,24 +3,19 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use super::rollback::{SnapshotRef, SnapshotType, Snapshots, Inputs, Rollback, MyState};
+use super::rollback::*;
+use super::rollback::{State, States, Snapshot};
 use super::{ClientMessage, ServerMessage, NetConfig};
+use crate::input::{UpdateInputEvent, Inputs};
+
+use bevy_gravirollback::new::*;
 
 use bevy::prelude::*;
 
-use bevy::utils::Entry;
-use bevy_quinnet::{server::{Server, ServerConfiguration, certificate::CertificateRetrievalMode, ConnectionLostEvent, ConnectionEvent}, shared::channel::ChannelId};
+use bevy::utils::{HashMap, Entry};
+use bevy_quinnet::server::{Server, ServerConfiguration, certificate::CertificateRetrievalMode, ConnectionLostEvent, ConnectionEvent};
 
-use std::{net::ToSocketAddrs, sync::atomic::{AtomicU64, Ordering}};
-
-pub static ROLLBACK_ID_COUNTER: RollbackIdCounter = RollbackIdCounter(AtomicU64::new(0));
-pub struct RollbackIdCounter(AtomicU64);
-
-impl RollbackIdCounter {
-    pub fn get_new(&self) -> Rollback {
-        Rollback(self.0.fetch_add(1, Ordering::SeqCst))
-    }
-}
+use std::net::ToSocketAddrs;
 
 #[derive(Resource)]
 pub struct ServerMarker;
@@ -34,37 +29,55 @@ impl Default for SummaryTimer {
 
 pub fn handle(
     mut server: ResMut<Server>,
-    local_player: Option<Res<super::LocalPlayer>>,  //TODO: can this fail?
+    //local_player: Option<Res<super::LocalPlayer>>,  //TODO: can this fail?
     mut players: ResMut<super::PlayerMap>,
     
     mut commands: Commands,
 
-    mut snapshots: ResMut<Snapshots<MyState>>,
-    mut inputs: ResMut<Inputs>,
+    snapshot_info: Res<SnapshotInfo>,
+    //mut reader: Local<bevy::ecs::event::ManualEventReader<UpdateInputEvent<(Player, Input)>>>,
+    mut input_event: EventWriter<UpdateInputEvent>,
+    mut state_event: EventWriter<UpdateStateEvent<State>>,
 
     map: Res<crate::map::Map>,
+    update_timer: Res<crate::gamestate::UpdateTimer>,
     
     mut events_conn: EventReader<ConnectionEvent>,
     mut events_lost: EventReader<ConnectionLostEvent>,
-
-    time: Res<Time>,
-    mut timer: Local<SummaryTimer>,
 ) {
-    let now = snapshots.frame;
+    let now = snapshot_info.last;
     let endpoint = server.endpoint_mut();
 
-    for event in events_conn.iter() {
+    for event in events_conn.read() {
         println!("ConnectionEvent: Player {} connected",event.id);
     }
 
     //handle lost connections
-    for event in events_lost.iter() {
+    for event in events_lost.read() {
         let player = crate::player::Player(event.id);
         println!("Player {} disconnected",player.0);
         players.0.remove(&player);
         endpoint.try_broadcast_message(ServerMessage::Disconnected(player));
         commands.add(crate::player::despawn_player(player));
     }
+
+    //send local player input
+    /*if let Some(player) = local_player {
+        let player = player.0;
+        for UpdateInputEvent { frame, input } in reader.read(&mut input_event) {
+            if player==input.0 {
+                let input = input.1.clone();
+                if !input.buttons.is_none() || !input.mouse.deltas.is_empty() {
+                    endpoint.try_broadcast_message_on(
+                        ChannelId::UnorderedReliable,
+                        ServerMessage::Input(*frame, player, input)
+                    );
+                }
+            }else{
+                println!("local player {player:?} input player {:?}",input.0);
+            }
+        }
+    }*/
 
     //handle received messages
     for client_id in endpoint.clients() {
@@ -82,17 +95,23 @@ pub fn handle(
                     endpoint.try_send_message(client_id, ServerMessage::ConnectionGranted(
                         player,
                         map.clone(),
-                        snapshots.clone(),
+                        States {
+                            last_frame: now,
+                            frame_0_time: update_timer.frame_0_time,
+                        },
                     ));
                     endpoint.try_broadcast_message(ServerMessage::Connected(player, rollback));
                 },
-                ClientMessage::RequestPlayer => {
-                    inputs.0.entry(player).or_default().buttons.set(crate::input::Buttons::Spawn);
-                    //TODO: broadcast SpawnPlayer
-                },
                 ClientMessage::Input(frame, input) => {
-                    //println!("received input frame {frame}: {}",input.buttons.bits());
+                    println!("received input frame {frame}");
 
+                    input_event.send(UpdateInputEvent {
+                        frame,
+                        player,
+                        input,
+                    });
+
+                    /*
                     match SnapshotRef::new(now, frame, &mut snapshots, &mut inputs) {
                         SnapshotType::Past(snapshot) | SnapshotType::Now(snapshot) => {
                             match snapshot.inputs.0.entry(player) {
@@ -133,8 +152,15 @@ pub fn handle(
                         },
                         SnapshotType::SuperPast => ()
                     }
+                    */
                 },
-                ClientMessage::Correction(frame, state_cor) => {
+                ClientMessage::Correction(frame, state) => {
+                    //TODO: we should have some policy for rejecting too big changes
+                    if let Some(&id) = players.0.get(&player) {
+                        state_event.send(UpdateStateEvent {frame, id, state});
+                    }
+
+                    /*
                     match SnapshotRef::new(now, frame, &mut snapshots, &mut inputs) {
                         SnapshotType::Past(snapshot) | SnapshotType::Now(snapshot) => {
                             if let Some(rollback) = players.0.get(&player) {
@@ -176,31 +202,49 @@ pub fn handle(
                         },
                         SnapshotType::SuperPast => (),
                     }
+                    */
                 }
             }
         }
     }
+}
 
+pub fn send_state_summary(
+    server: Res<Server>,
+    query: Query<(&RollbackID, &Rollback<PhysicsBundle>, &super::EntityType)>,
+    inputs: Res<Rollback<Inputs>>,
+    snapshot_info: Res<SnapshotInfo>,
+    players: Res<super::PlayerMap>,
+    time: Res<Time>,
+    mut timer: Local<SummaryTimer>,
+) {
     if timer.0.tick(time.delta()).just_finished() {
-        //send state summary
         println!("sending summary");
-        let snapshot = snapshots.buffer.back().expect("should contain at least one Snapshot").clone();
-        endpoint.try_broadcast_message(ServerMessage::StateSummary(now, snapshot, players.clone()))
-    }
+        let endpoint = server.endpoint();
+        //do not send the latest snapshot, instead send old, that way it is likely not going to change anymore
+        let offset = SNAPSHOTS_LEN as u64 / 4;
+        let frame = if snapshot_info.last > offset {
+            snapshot_info.last - offset
+        }else{return};
+        
+        let index = snapshot_info.index(frame);
 
-    //send local player input
-    let Some(player) = local_player else{return};
-    let player = player.0;
-    let Some(input) = inputs.0.get(&player) else{return};
-    endpoint.try_broadcast_message_on(
-        ChannelId::UnorderedReliable,
-        ServerMessage::Input(now, player, input.clone())
-    );
+        let mut states = HashMap::new();
+        for (&id, physics_bundle, &entity_type) in &query {
+            states.insert(id, State(physics_bundle.0[index].clone(), entity_type));
+        }
+
+        let snapshot = Snapshot {
+            states,
+            inputs: inputs.0[index].clone(),
+        };
+        endpoint.try_broadcast_message(ServerMessage::StateSummary(frame, snapshot, players.clone()))
+    }
 }
 
 pub fn start(
     mut server: ResMut<Server>,
-    config: ResMut<NetConfig>,
+    config: Res<NetConfig>,
 ) {
     let addr = config.ip_port.to_socket_addrs().unwrap().next().unwrap();
     println!("socket: {addr}");

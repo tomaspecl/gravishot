@@ -3,13 +3,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::networking::rollback::ROLLBACK_ID_COUNTER;
 use crate::networking::LocalPlayer;
-use crate::networking::rollback::Inputs;
 use crate::player::player_control::PlayerControl;
+use crate::player::Player;
+
+use bevy_gravirollback::new::*;
 
 use bevy::prelude::*;
 
+use bevy::utils::{HashMap, Entry};
 use bevy::input::mouse::MouseMotion;
+
 use bitmask_enum::bitmask;
 use serde::{Serialize, Deserialize};
 
@@ -22,7 +27,15 @@ fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Butt
     })
 }
 
-/// Input from one player for one frame
+#[derive(Resource, Reflect, Default, Serialize, Deserialize, Clone)]
+#[reflect(Resource)]
+pub struct Inputs(pub HashMap<Player, Input>);
+
+#[derive(Resource, Reflect, Default)]
+#[reflect(Resource)]
+pub struct LocalInput(pub Input);
+
+/// Input from one player for one frame, also used for local player input
 #[derive(Reflect, Default, Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
 pub struct Input {
     /// Contains data about pressed keys and mouse buttons
@@ -31,6 +44,13 @@ pub struct Input {
     pub buttons: Buttons,
     /// Contains data about mouse movements TODO: instead CameraDelta
     pub mouse: MouseDelta,
+    /// Various signals that a player could send, like spawning or shooting
+    pub signals: Signals,
+}
+impl Input {
+    pub fn is_empty(&self) -> bool {
+        self.buttons.is_none() && self.mouse.is_empty() && self.signals.is_empty()
+    }
 }
 
 enum I {
@@ -50,8 +70,6 @@ pub enum Buttons {
     E,
     Shift,
     Space,
-    Shoot,
-    Spawn,
 }
 impl Default for Buttons { fn default() -> Self { Self::none() } }
 
@@ -61,15 +79,19 @@ pub const MOUSE_SCALE: f32 = 100.0;
 pub struct MouseDelta {
     pub deltas: Vec<(i16,i16)>,  //TODO: optimize size, possibly by combining all deltas into a single delta with the same effect?
 }
+impl MouseDelta {
+    pub fn is_empty(&self) -> bool {
+        self.deltas.is_empty()
+    }
+}
 
 impl Buttons {
     pub fn set(&mut self, button: Buttons) {
         self.bits |= button.bits;
     }
-    fn set_i(&mut self, button: I, control: &PlayerControl) {
-        use self::I::{K, M};
+    fn set_i(&mut self, button: I, _control: &PlayerControl) {
+        use self::I::K;
         self.bits |= match button {
-            M(MouseButton::Left) if control.first_person => Buttons::Shoot,
             K(KeyCode::W)        => Buttons::W,
             K(KeyCode::S)        => Buttons::S,
             K(KeyCode::A)        => Buttons::A,
@@ -92,30 +114,53 @@ macro_rules! pressed {
     }
 }
 
-pub fn clear(mut inputs: ResMut<Inputs>) {
-    inputs.0.clear();
+#[derive(Reflect, Default, Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
+pub struct Signals {
+    pub shoot: Option<ShootSignal>,
+    pub spawn: Option<()>,
+}
+impl Signals {
+    pub fn is_empty(&self) -> bool {
+        self.shoot.is_none() && self.spawn.is_none()
+    }
+}
+
+#[derive(Reflect, Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
+pub struct ShootSignal {
+    pub id: RollbackID,
 }
 
 pub fn get_local_input(
     keyboard: Res<bevy::input::Input<KeyCode>>,
     mouse_button: Res<bevy::input::Input<MouseButton>>,
     mut mouse_motion: EventReader<MouseMotion>,
-    mut inputs: ResMut<Inputs>,
-    local_player: Res<LocalPlayer>,
     player_control: Res<PlayerControl>,
-) {
-    let input = inputs.0.entry(local_player.0).or_default();
-    let buttons = &mut input.buttons;
-    let mouse = &mut input.mouse;
+    //mut spawn_events: EventWriter<crate::spawning::LocalSpawnEvent>,
+    mut local_input: ResMut<LocalInput>,
 
+    //for testing, playing beeps
+    //mut commands: Commands,
+    //mut pitch_assets: ResMut<Assets<Pitch>>,
+    //client_marker: Option<Res<crate::networking::client::ClientMarker>>,
+) {
+    //https://bevyengine.org/examples/Audio/pitch/
+    /*if client_marker.is_some() {
+        commands.spawn(PitchBundle {
+            source: pitch_assets.add(Pitch::new(1000.0, std::time::Duration::from_millis(100))),
+            settings: PlaybackSettings::DESPAWN,
+        });
+    }*/
+
+    let input = &mut local_input.0;
     for key in keyboard.get_pressed() {
-        buttons.set_i(I::K(*key), &player_control);
+        input.buttons.set_i(I::K(*key), &player_control);
     }
     for mouse_button in mouse_button.get_pressed() {
-        buttons.set_i(I::M(*mouse_button), &player_control);
+        input.buttons.set_i(I::M(*mouse_button), &player_control);
     }
+
     if player_control.first_person || mouse_button.pressed(MouseButton::Left) {
-        for &MouseMotion{ delta: Vec2 {mut x,mut y} } in mouse_motion.iter() {
+        for &MouseMotion{ delta: Vec2 {mut x,mut y} } in mouse_motion.read() {
             if player_control.first_person {
                 x *= player_control.sensitivity;
                 y *= player_control.sensitivity;
@@ -125,7 +170,119 @@ pub fn get_local_input(
             
             let x = ((MOUSE_SCALE*x).trunc() as i32).min(i16::MAX as i32).max(i16::MIN as i32) as i16;
             let y = ((MOUSE_SCALE*y).trunc() as i32).min(i16::MAX as i32).max(i16::MIN as i32) as i16;
-            mouse.deltas.push((x,y));
+            input.mouse.deltas.push((x,y));
+        }
+    }
+
+    //println!("testing shooting");
+    if mouse_button.pressed(MouseButton::Left) && player_control.first_person {
+        println!("shooting");
+        input.signals.shoot = Some(ShootSignal {
+            id: ROLLBACK_ID_COUNTER.get_new(),
+        });
+        //spawn_events.send(crate::spawning::LocalSpawnEvent::Bullet);
+    }
+}
+
+//                                      Server -> receive Client messages -> map Input to UpdateInputEvent --v
+// Client/(Server with local Client) -> LocalInputEvent -> handle_local_input_event -> emit UpdateInputEvent -> handle_update_input_event (check conditions and update Rollback<Inputs>)
+//                                                                                  |                                       |--(we are the Server)--> broadcast Input
+//                                                                                  --(we are a Client)--> send Input to the Server
+
+pub fn handle_local_input_event(
+    mut local_input: ResMut<LocalInput>,
+    mut input_events: EventWriter<UpdateInputEvent>,
+    client: Option<Res<bevy_quinnet::client::Client>>,
+    snapshot_info: Res<SnapshotInfo>,
+    local_player: Res<LocalPlayer>,
+) {
+    let local_player = local_player.0;
+    let frame = snapshot_info.last;
+
+    let input = std::mem::take(&mut local_input.0);
+
+    input_events.send(UpdateInputEvent {
+        frame,
+        player: local_player,
+        input: input.clone(),
+    });
+
+    if let Some(ref client) = client {  //send local Input to the Server
+        if !input.is_empty() {
+            //println!("client sending input");
+            client.connection().try_send_message_on(
+                bevy_quinnet::shared::channel::ChannelId::UnorderedReliable,
+                crate::networking::ClientMessage::Input(frame, input)
+            );
+        }
+    }
+}
+
+#[derive(Event, Serialize, Deserialize, Clone)]
+pub struct UpdateInputEvent {
+    pub frame: u64,
+    pub player: Player,
+    pub input: Input,
+}
+
+pub fn handle_update_input_event(
+    mut input: EventReader<UpdateInputEvent>,
+    mut inputs: ResMut<Rollback<Inputs>>,
+    mut snapshot_info: ResMut<SnapshotInfo>,
+    server: Option<Res<bevy_quinnet::server::Server>>,
+) {
+    let last = snapshot_info.last;
+
+    for event in input.read() {
+        let UpdateInputEvent { frame, player, input } = event.clone();
+
+        if input.is_empty() {
+            continue;
+        }
+
+        //println!("update input event frame {frame} player {player:?} {input:?}");
+        let update = frame<snapshot_info.last;
+        if frame>last {
+            warn!("future update event frame {frame} last {last} player {player:?}");
+            continue;
+        }
+
+        let index = snapshot_info.index(frame);
+        let snapshot = &mut snapshot_info.snapshots[index];
+        if snapshot.frame == frame {
+            //insert this input
+            match inputs.0[index].0.entry(player) {
+                Entry::Vacant(entry) => {
+                    if !input.is_empty() {
+                        //println!("input of player {player:?} from frame {frame} got inserted {input:?}");
+                    }
+                    if let Some(ref server) = server {
+                        let endpoint = server.endpoint();
+                        let mut clients = endpoint.clients();
+                        clients.retain(|&x| x!=player.0);   //send to everyone except the Client that sent it
+                        endpoint.try_send_group_message_on(
+                            clients.iter(),
+                            bevy_quinnet::shared::channel::ChannelId::UnorderedReliable,
+                            crate::networking::ServerMessage::Input(event.clone()),
+                        );
+                    }
+                    entry.insert(input);
+                    snapshot.modified |= update;
+                },
+                Entry::Occupied(mut entry) => {
+                    if server.is_none() {
+                        if *entry.get() != input {
+                            warn!("input of player {player:?} from frame {frame} got changed");
+                            entry.insert(input);
+                            snapshot.modified |= update;
+                        }
+                    }else{
+                        warn!("input of player {player:?} from frame {frame} tried to change");
+                    }
+                },
+            }
+        }else{
+            warn!("too old frame updated {frame} stored {} last {last} player {player:?}", snapshot.frame);
         }
     }
 }

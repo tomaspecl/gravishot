@@ -140,7 +140,7 @@ pub fn wait_for_load(
     use bevy::asset::LoadState;
 
     if let Some(handle) = handle {
-        match server.get_load_state(&handle.0) {
+        match server.get_load_state(&handle.0).expect("the handle should be known") {
             LoadState::Loaded => {
                 commands.remove_resource::<AssetsLoading>();
 
@@ -197,7 +197,7 @@ pub fn wait_for_load(
 
                 next_state.set(crate::gamestate::GameState::LoadingDone);
             },
-            LoadState::Failed | LoadState::Unloaded => panic!("Could not load asteroid assets"),
+            LoadState::Failed => panic!("Could not load asteroid assets"),
             _ => ()
         }
     }

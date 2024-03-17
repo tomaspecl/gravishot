@@ -4,8 +4,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::gravity::GravityVector;
-use crate::networking::rollback::Inputs;
-use crate::input::{Buttons, MOUSE_SCALE};
+use crate::input::{Buttons, Inputs, MOUSE_SCALE};
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
@@ -185,8 +184,8 @@ pub fn movement_system(
         -> responds to forces, impulses, etc...
         */
 
-        let lmax = constants.lmax;
-        let lmaxwalk = constants.lmaxwalk;
+        let _lmax = constants.lmax;
+        let _lmaxwalk = constants.lmaxwalk;
         let l0 = constants.l0;
         let legs_power = constants.legs_power;
         let legs_const = constants.legs_const;
