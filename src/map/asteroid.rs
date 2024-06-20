@@ -3,7 +3,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::gravity::CreatesGravity;
+use crate::gravity::{AtractedByGravity, CreatesGravity};
 use super::AsteroidInstance;
 
 use bevy::prelude::*;
@@ -23,6 +23,9 @@ pub struct Asteroid {
     collider: Collider,
 }
 
+#[derive(Component)]
+pub struct AsteroidMarker;
+
 pub fn spawn_asteroid(
     commands: &mut Commands,
     asteroid: AsteroidInstance,
@@ -39,9 +42,12 @@ pub fn spawn_asteroid(
     let collider = a.collider.clone();
 
     commands.spawn((
+        AsteroidMarker,
+        Name::new("Asteroid"),
         RigidBody::KinematicPositionBased,
         collider,
         CreatesGravity(1.0),
+        AtractedByGravity(asteroid.atracted_by_gravity),
         SpatialBundle {
             transform,
             ..default()

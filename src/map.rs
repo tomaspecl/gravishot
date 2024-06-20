@@ -20,30 +20,34 @@ use serde::{Serialize, Deserialize};
 /// Server generates this on startup or loads it from a file.
 /// Server sends this to client which uses this to load the map.
 /// TODO: more general maps - general meshes and objects
-#[derive(Resource, Serialize, Deserialize, Debug, Clone)]
+#[derive(Resource, Reflect, Serialize, Deserialize, Default, Debug, Clone)]
+#[reflect(Resource)]
 pub struct Map {
     asteroids: Vec<AsteroidInstance>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+#[derive(Reflect, Serialize, Deserialize, Default, Debug, Clone, Copy)]
 pub struct AsteroidInstance {
     pub id: usize,
     pub transform: Transform,
+    pub atracted_by_gravity: f32,
 }
 impl AsteroidInstance {
     pub fn new(transform: Option<Transform>, id: Option<usize>, asteroids: &asteroid::AsteroidAssets) -> AsteroidInstance {
         let mut rng = thread_rng();
         let l = asteroids.asteroids.len();
         let id = id.and_then(|x| if x<l {Some(x)}else{None}).unwrap_or(rng.gen_range(0..l));
+        let size = 100.0;
         let transform = transform.unwrap_or(Transform::from_xyz(    //TODO: random orientation + scale
-            rng.gen_range(-50.0..50.0),
-            rng.gen_range(-50.0..50.0),
-            rng.gen_range(-50.0..50.0),
-        ).with_scale(Vec3::splat(5.0)));
+            rng.gen_range(-size..size),
+            rng.gen_range(-size..size),
+            rng.gen_range(-size..size),
+        ).with_scale(Vec3::splat(5.0*3.0)));
 
         AsteroidInstance {
             id,
             transform,
+            atracted_by_gravity: 0.0,
         }
     }
 }
@@ -54,12 +58,12 @@ pub fn generate_map(
 ) {
     let mut asteroids = Vec::new();
 
-    /*for _ in 0..10 {
-        asteroids.push(AsteroidInstance::new(None, None, &assets));
-    }*/
-    for _ in 0..1 {
-        asteroids.push(AsteroidInstance::new(Some(Transform::from_scale(Vec3::new(4.0, 3.0, 4.0)*5.0)), Some(0), &assets));
+    for _ in 0..5 {
+        asteroids.push(AsteroidInstance::new(None, Some(0), &assets));
     }
+    //for _ in 0..1 {
+    //    asteroids.push(AsteroidInstance::new(Some(Transform::from_scale(Vec3::new(4.0, 3.0, 4.0)*5.0*1.0)), Some(0), &assets));
+    //}
 
     commands.insert_resource(Map {
         asteroids,
@@ -69,9 +73,15 @@ pub fn generate_map(
 pub fn load_from_map(
     mut commands: Commands,
     map: Res<Map>,
-    assets: Res<asteroid::AsteroidAssets>
+    assets: Res<asteroid::AsteroidAssets>,
+    asteroids: Query<Entity, With<asteroid::AsteroidMarker>>,
 ) {
-    for &asteroid in map.asteroids.iter() {
-        asteroid::spawn_asteroid(&mut commands, asteroid, &assets);
+    if map.is_changed() {
+        for asteroid in &asteroids {
+            commands.entity(asteroid).despawn_recursive();
+        }
+        for &asteroid in map.asteroids.iter() {
+            asteroid::spawn_asteroid(&mut commands, asteroid, &assets);
+        }
     }
 }

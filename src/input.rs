@@ -92,14 +92,14 @@ impl Buttons {
     fn set_i(&mut self, button: I, _control: &PlayerControl) {
         use self::I::K;
         self.bits |= match button {
-            K(KeyCode::W)        => Buttons::W,
-            K(KeyCode::S)        => Buttons::S,
-            K(KeyCode::A)        => Buttons::A,
-            K(KeyCode::D)        => Buttons::D,
-            K(KeyCode::Q)        => Buttons::Q,
-            K(KeyCode::E)        => Buttons::E,
+            K(KeyCode::KeyW)        => Buttons::W,
+            K(KeyCode::KeyS)        => Buttons::S,
+            K(KeyCode::KeyA)        => Buttons::A,
+            K(KeyCode::KeyD)        => Buttons::D,
+            K(KeyCode::KeyQ)        => Buttons::Q,
+            K(KeyCode::KeyE)        => Buttons::E,
             K(KeyCode::ShiftLeft)   => Buttons::Shift,
-            K(KeyCode::Space)    => Buttons::Space,
+            K(KeyCode::Space)       => Buttons::Space,
             //K()        => Buttons::,
             _ => Buttons::none()
         }.bits;
@@ -117,7 +117,7 @@ macro_rules! pressed {
 #[derive(Reflect, Default, Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
 pub struct Signals {
     pub shoot: Option<ShootSignal>,
-    pub spawn: Option<()>,
+    pub spawn: Option<PlayerSpawnSignal>,
 }
 impl Signals {
     pub fn is_empty(&self) -> bool {
@@ -129,10 +129,15 @@ impl Signals {
 pub struct ShootSignal {
     pub id: RollbackID,
 }
+#[derive(Reflect, Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
+pub struct PlayerSpawnSignal {
+    pub body: RollbackID,
+    pub gun: RollbackID,
+}
 
 pub fn get_local_input(
-    keyboard: Res<bevy::input::Input<KeyCode>>,
-    mouse_button: Res<bevy::input::Input<MouseButton>>,
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mouse_button: Res<ButtonInput<MouseButton>>,
     mut mouse_motion: EventReader<MouseMotion>,
     player_control: Res<PlayerControl>,
     //mut spawn_events: EventWriter<crate::spawning::LocalSpawnEvent>,
@@ -172,11 +177,13 @@ pub fn get_local_input(
             let y = ((MOUSE_SCALE*y).trunc() as i32).min(i16::MAX as i32).max(i16::MIN as i32) as i16;
             input.mouse.deltas.push((x,y));
         }
+    }else{
+        mouse_motion.clear();
     }
 
     //println!("testing shooting");
-    if mouse_button.pressed(MouseButton::Left) && player_control.first_person {
-        println!("shooting");
+    if mouse_button.pressed(MouseButton::Left) && player_control.first_person || keyboard.pressed(KeyCode::KeyG) {
+        //println!("shooting");
         input.signals.shoot = Some(ShootSignal {
             id: ROLLBACK_ID_COUNTER.get_new(),
         });

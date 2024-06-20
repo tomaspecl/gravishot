@@ -5,7 +5,8 @@
 
 use super::EntityType;
 use crate::bullet::SpawnBullet;
-use crate::player::SpawnPlayer;
+use crate::player::gun::SpawnGun;
+use crate::player::{Health, HeadData, SpawnPlayer};
 use crate::input::Inputs;
 
 use bevy_gravirollback::new::for_user::*;
@@ -38,9 +39,9 @@ pub struct PhysicsBundle {
 
 impl RollbackCapable for PhysicsBundle {
     type RestoreQuery<'a> = (&'a mut Transform, &'a mut Velocity);
-    type RestoreExtraParam = ();
+    type RestoreExtraParam<'a> = ();
     type SaveQuery<'a> = (&'a Transform, &'a Velocity);
-    type SaveExtraParam = ();
+    type SaveExtraParam<'a> = ();
     
     fn restore(&self, mut q: <Self::RestoreQuery<'_> as WorldQuery>::Item<'_>, _extra: &mut StaticSystemParam<()>) {
         *q.0 = self.transform;
@@ -56,7 +57,7 @@ impl RollbackCapable for PhysicsBundle {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct State(pub PhysicsBundle, pub EntityType);
+pub struct State(pub PhysicsBundle, pub Option<(HeadData,Health)>, pub EntityType);
 
 #[derive(Serialize, Deserialize)]
 pub struct States {
@@ -94,7 +95,7 @@ pub fn handle_update_state_event(
     mut events: EventReader<UpdateStateEvent<State>>,
     mut snapshot_info: ResMut<SnapshotInfo>,
     rollback_map: Res<RollbackMap>,
-    mut query: Query<&mut Rollback<PhysicsBundle>>,
+    mut query: Query<(&mut Rollback<PhysicsBundle>, Option<(&mut Rollback<HeadData>, &mut Rollback<Health>)>)>,
     mut commands: Commands,
 ) {
     for UpdateStateEvent { frame, id, state } in events.read() {
@@ -113,15 +114,34 @@ pub fn handle_update_state_event(
             //println!("update_state_event id {id:?}");
             if let Some(&entity) = rollback_map.0.get(id) {
                 //println!("update_state_event updating");
-                let mut physics_bundle = query.get_mut(entity).expect("this entity should exist");
+                let (mut physics_bundle, player_data) = query.get_mut(entity).expect("this entity should exist");
                 physics_bundle.0[index].transform = state.0.transform;
                 physics_bundle.0[index].velocity = state.0.velocity;
+                if let Some(mut player_data) = player_data {
+                    let data = state.1.clone().expect("can not update Player state without HeadData or Health");
+                    player_data.0.0[index] = data.0;
+                    player_data.1.0[index] = data.1;
+                }else{
+                    assert!(state.1.is_none());
+                }
             }else{
                 println!("update_state_event spawning id {id:?}");
-                match state.1 {
-                    EntityType::Player(player) => commands.add(spawn3(crate::player::make_player(SpawnPlayer {
+                match state.2 {
+                    EntityType::Player(player) => {
+                        let data = state.1.clone().expect("can not update Player state without HeadData or Health");
+                        commands.add(spawn3(crate::player::make_player(SpawnPlayer {
+                            player,
+                            rollback_body: *id,
+                            transform: state.0.transform,
+                            velocity: state.0.velocity,
+                            index: Some(index),
+                            head_data: data.0,
+                            health: data.1,
+                        })));
+                    },
+                    EntityType::Gun(player) => commands.add(spawn3(crate::player::gun::make_gun(SpawnGun {
                         player,
-                        rollback: *id,
+                        rollback_gun: *id,
                         transform: state.0.transform,
                         velocity: state.0.velocity,
                         index: Some(index),
@@ -134,7 +154,6 @@ pub fn handle_update_state_event(
                     }))),
                 }
             }
-            
         }else{
             //too old frame
             println!("update_state_event too old frame");

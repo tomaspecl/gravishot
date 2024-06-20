@@ -5,6 +5,7 @@
 
 mod mainmenu;
 mod spawn_menu;
+mod healthbar;
 
 use crate::{map, player, networking, input, gravity, bullet};
 
@@ -70,7 +71,7 @@ impl Plugin for GameStatePlugin {
         })
         .register_type::<UpdateTimer>()
 
-        .add_state::<GameState>()
+        .init_state::<GameState>()
 
         //GameState::Loading
         .add_systems(OnEnter(GameState::Loading),map::asteroid::start_loading)
@@ -111,7 +112,8 @@ impl Plugin for GameStatePlugin {
                     (
                         input::get_local_input.run_if(game_tick_condition),
 
-                        spawn_menu::ui.run_if(not(player::local_player_exists))
+                        spawn_menu::ui.run_if(not(player::local_player_exists)),
+                        healthbar::ui.run_if(player::local_player_exists),
                     ).in_set(HandleIO::LocalInput),
 
                     (
@@ -125,6 +127,10 @@ impl Plugin for GameStatePlugin {
             );
         }
         
+        //taken from bevy_rapier3d::plugin:
+        // These *must* be in the main schedule currently so that they do not miss events.
+        app.add_systems(PostUpdate, (bevy_rapier3d::plugin::systems::sync_removals,));
+        
         app
         .add_systems(Update,(   //TODO: put this into GameState::Running, client::handle part that handles connecting should be before GameState::Running
             (
@@ -133,11 +139,13 @@ impl Plugin for GameStatePlugin {
                 (
                     networking::server::handle,
                     networking::server::send_state_summary,
-                ).run_if(resource_exists::<networking::server::ServerMarker>()),
+                ).run_if(resource_exists::<networking::server::ServerMarker>),
                 //when client exists    TODO: move to client.rs ? or networking.rs ?
                 // Talks to the connected server and syncs with it
-                networking::client::handle.run_if(resource_exists::<networking::client::ClientMarker>()),
+                networking::client::handle.run_if(resource_exists::<networking::client::ClientMarker>),
             ).in_set(HandleIO::Networking),
+
+            map::load_from_map.run_if(in_state(GameState::Running)),
 
             (
                 (
@@ -161,8 +169,16 @@ impl Plugin for GameStatePlugin {
                     gravity::force_reset,
                     //spawning::handle_spawns,
                     player::spawn_player_system,
-                    bullet::spawn_bullet_system,
-                    bullet::despawn_bullet_system
+                    player::health_system,
+                    (
+                        player::gun::connect_joints,
+                        player::gun::update_joints,
+                        bullet::spawn_bullet_system
+                    ).chain(),
+                    (
+                        bullet::bullet_collision_system,
+                        bullet::despawn_bullet_system,
+                    ).chain(),
                 ),
                 apply_deferred,
                 (   //CoreUpdate
@@ -181,6 +197,7 @@ impl Plugin for GameStatePlugin {
                         RapierPhysicsPlugin::<NoUserData>::get_systems(PhysicsSet::SyncBackend),
                         RapierPhysicsPlugin::<NoUserData>::get_systems(PhysicsSet::StepSimulation),
                         RapierPhysicsPlugin::<NoUserData>::get_systems(PhysicsSet::Writeback),
+                        (bevy::transform::systems::propagate_transforms, bevy::transform::systems::sync_simple_transforms),
                         //bevy::transform::TransformSystem::TransformPropagate,  //TODO: there is no TransformPropagate
                     ).chain(),
                     bevy_rapier3d::plugin::systems::sync_removals,
@@ -242,7 +259,6 @@ fn after_load(
         //let player = player::Player(0);
         //commands.insert_resource(networking::LocalPlayer(player));
         //commands.insert_resource(networking::PlayerMap(bevy::utils::HashMap::from([(player,networking::server::ROLLBACK_ID_COUNTER.get_new())])));
-        commands.insert_resource(networking::PlayerMap::default());
 
         commands.insert_resource(networking::server::ServerMarker);
         state.set(GameState::ServerSetup);

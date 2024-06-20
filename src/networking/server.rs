@@ -12,7 +12,7 @@ use bevy_gravirollback::new::*;
 
 use bevy::prelude::*;
 
-use bevy::utils::{HashMap, Entry};
+use bevy::utils::HashMap;
 use bevy_quinnet::server::{Server, ServerConfiguration, certificate::CertificateRetrievalMode, ConnectionLostEvent, ConnectionEvent};
 
 use std::net::ToSocketAddrs;
@@ -30,7 +30,7 @@ impl Default for SummaryTimer {
 pub fn handle(
     mut server: ResMut<Server>,
     //local_player: Option<Res<super::LocalPlayer>>,  //TODO: can this fail?
-    mut players: ResMut<super::PlayerMap>,
+    players: Query<(&crate::player::Player, &RollbackID)>,
     
     mut commands: Commands,
 
@@ -56,7 +56,6 @@ pub fn handle(
     for event in events_lost.read() {
         let player = crate::player::Player(event.id);
         println!("Player {} disconnected",player.0);
-        players.0.remove(&player);
         endpoint.try_broadcast_message(ServerMessage::Disconnected(player));
         commands.add(crate::player::despawn_player(player));
     }
@@ -79,19 +78,17 @@ pub fn handle(
         }
     }*/
 
+    if map.is_changed() {
+        endpoint.try_broadcast_message(ServerMessage::MapUpdate(map.clone()));
+    }
+
     //handle received messages
     for client_id in endpoint.clients() {
         let player = crate::player::Player(client_id);
         while let Some(msg) = endpoint.try_receive_message_from::<ClientMessage>(client_id) {
             match msg {
                 ClientMessage::Connect => {
-                    let rollback = ROLLBACK_ID_COUNTER.get_new();
-                    println!("Player {} connected with rollback {}",player.0,rollback.0);
-                    if let Entry::Vacant(e) = players.0.entry(player) {
-                        e.insert(rollback);
-                    }else{
-                        warn!("player already exists!")
-                    }
+                    println!("Player {player:?} connected");
                     endpoint.try_send_message(client_id, ServerMessage::ConnectionGranted(
                         player,
                         map.clone(),
@@ -100,7 +97,7 @@ pub fn handle(
                             frame_0_time: update_timer.frame_0_time,
                         },
                     ));
-                    endpoint.try_broadcast_message(ServerMessage::Connected(player, rollback));
+                    endpoint.try_broadcast_message(ServerMessage::Connected(player));
                 },
                 ClientMessage::Input(frame, input) => {
                     println!("received input frame {frame}");
@@ -156,7 +153,8 @@ pub fn handle(
                 },
                 ClientMessage::Correction(frame, state) => {
                     //TODO: we should have some policy for rejecting too big changes
-                    if let Some(&id) = players.0.get(&player) {
+
+                    if let Some((_,&id)) = players.iter().find(|(p,_)| **p==player) {
                         state_event.send(UpdateStateEvent {frame, id, state});
                     }
 
@@ -211,15 +209,14 @@ pub fn handle(
 
 pub fn send_state_summary(
     server: Res<Server>,
-    query: Query<(&RollbackID, &Rollback<PhysicsBundle>, &super::EntityType)>,
+    query: Query<(&RollbackID, &Rollback<Exists>, &Rollback<PhysicsBundle>, Option<(&Rollback<crate::player::HeadData>, &Rollback<crate::player::Health>)>, &super::EntityType)>,
     inputs: Res<Rollback<Inputs>>,
     snapshot_info: Res<SnapshotInfo>,
-    players: Res<super::PlayerMap>,
     time: Res<Time>,
     mut timer: Local<SummaryTimer>,
 ) {
     if timer.0.tick(time.delta()).just_finished() {
-        println!("sending summary");
+        //println!("sending summary");
         let endpoint = server.endpoint();
         //do not send the latest snapshot, instead send old, that way it is likely not going to change anymore
         let offset = SNAPSHOTS_LEN as u64 / 4;
@@ -230,15 +227,23 @@ pub fn send_state_summary(
         let index = snapshot_info.index(frame);
 
         let mut states = HashMap::new();
-        for (&id, physics_bundle, &entity_type) in &query {
-            states.insert(id, State(physics_bundle.0[index].clone(), entity_type));
+        for (&id, exists, physics_bundle, player_data, &entity_type) in &query {
+            //TODO: this also sends entities present in current frame that were not yet spawned in the past frame
+            //this will then cause a crash when the Client receives it, it will spawn the entity before it should be spawned
+            //and then later it will receive the spawn signal that will try to spawn the entity second time -> crash
+
+            //this should fix it:
+            if !exists.0[index].0 {continue}
+
+            let player_data = player_data.map(|x| (x.0.0[index].clone(),x.1.0[index].clone()));
+            states.insert(id, State(physics_bundle.0[index].clone(), player_data, entity_type));
         }
 
         let snapshot = Snapshot {
             states,
             inputs: inputs.0[index].clone(),
         };
-        endpoint.try_broadcast_message(ServerMessage::StateSummary(frame, snapshot, players.clone()))
+        endpoint.try_broadcast_message(ServerMessage::StateSummary(frame, snapshot))
     }
 }
 

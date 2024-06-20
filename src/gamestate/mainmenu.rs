@@ -4,12 +4,10 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use super::GameState;
-use crate::networking::{NetConfig, client::ClientMarker, server::ServerMarker, LocalPlayer, PlayerMap};
-use crate::networking::rollback::ROLLBACK_ID_COUNTER;
+use crate::networking::{NetConfig, client::ClientMarker, server::ServerMarker, LocalPlayer};
 use crate::player::Player;
 
 use bevy::prelude::*;
-use bevy::utils::HashMap;
 use bevy_egui::{egui,EguiContexts};
 
 pub fn ui(
@@ -26,7 +24,6 @@ pub fn ui(
         ui.text_edit_singleline(&mut net.ip_port);
 
         if ui.button("join server").clicked() {
-            commands.insert_resource(PlayerMap(HashMap::new()));
             commands.init_resource::<bevy_quinnet::client::Client>();
             commands.insert_resource(ClientMarker);
             state.set(GameState::ClientSetup);
@@ -34,7 +31,6 @@ pub fn ui(
         if ui.button("start server").clicked() {
             let player = Player(0);
             commands.insert_resource(LocalPlayer(player));
-            commands.insert_resource(PlayerMap(HashMap::from([(player,ROLLBACK_ID_COUNTER.get_new())])));
             commands.init_resource::<bevy_quinnet::server::Server>();
             commands.insert_resource(ServerMarker);
             state.set(GameState::ServerSetup);

@@ -45,12 +45,12 @@ fn main() {
         });
         app.insert_resource(AmbientLight {
             color: Color::rgb(1.0,1.0,1.0),
-            brightness: 0.2,
+            brightness: 300.0,
         });
     }
-
+    
     #[cfg(feature="include_assets")] {
-        default_plugins = default_plugins.add_before::<bevy::asset::AssetPlugin, _>(bevy_embedded_assets::EmbeddedAssetPlugin);
+        default_plugins = default_plugins.add_before::<bevy::asset::AssetPlugin, _>(bevy_embedded_assets::EmbeddedAssetPlugin::default());
     }
     
     app.add_plugins(default_plugins);
@@ -65,7 +65,7 @@ fn main() {
             bevy_inspector_egui::quick::WorldInspectorPlugin::new(),
             //bevy_inspector_egui_rapier::InspectableRapierPlugin,  //TODO: is it still needed?
             //EditorPlugin,
-            //RapierDebugRenderPlugin::default(),
+            RapierDebugRenderPlugin::default(),
         ));
     }
 
@@ -100,8 +100,6 @@ fn setup_server(
 
 fn setup(
     mut commands: Commands,
-    asteroids: Res<map::asteroid::AsteroidAssets>,
-    map: Res<map::Map>,
     mut window: Query<&mut Window, With<bevy::window::PrimaryWindow>>,
 ) {
     window.single_mut().present_mode = bevy::window::PresentMode::AutoNoVsync;
@@ -111,6 +109,4 @@ fn setup(
         point_light: PointLight::default(),
         ..default()
     });
-
-    map::load_from_map(commands, map, asteroids);
 }

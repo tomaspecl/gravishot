@@ -15,6 +15,15 @@ use bevy_rapier3d::prelude::*;
 
 use serde::{Serialize, Deserialize};
 
+pub const BULLET_DENSITY: f32 = 0.04;
+pub const BULLET_VELOCITY: f32 = 
+    //50.0;
+    25.0;
+
+const RADIUS: f32 = 0.075;
+const MASS: f32 = 4.0/3.0*std::f32::consts::PI*RADIUS*RADIUS*RADIUS * BULLET_DENSITY;
+const ANGULAR_INERTIA: f32 = 2.0/5.0*MASS*RADIUS*RADIUS;
+
 #[derive(Component)]
 pub struct Bullet;
 
@@ -29,30 +38,73 @@ pub struct SpawnBullet {
 pub fn spawn_bullet_system(
     mut commands: Commands,
     inputs: Res<Inputs>,
-    player_query: Query<(&Player, &Transform)>,
+    mut gun_query: Query<(&Player, &Transform, &mut Velocity, &mut crate::player::gun::Gun)>,
     info: Res<SnapshotInfo>,
 ) {
-    for (&player, input) in inputs.0.iter() {
-        if let Some(shoot) = &input.signals.shoot {
-            if let Some((_, &transform)) = player_query.iter().find(|(&x,_)| x==player) {
-                let rollback = shoot.id;
-                let mut transform = transform;
-                let forward = transform.forward();
-                transform.translation += forward * 0.5; //TODO: move magic numbers to constants
+    for (player, &transform, mut gun_velocity, mut gun) in &mut gun_query {
+        gun.0 = gun.0.saturating_sub(1);
+        if gun.0!=0 {continue}
+
+        let Some(input) = inputs.0.get(player) else{continue};
+        let Some(shoot) = &input.signals.shoot else{continue};
+
+        gun.0 = 5;
+
+        let rollback = shoot.id;
+
+        let mut transform = transform;
+        let forward = transform.forward();
+        transform.translation += forward * 0.5; //TODO: move magic numbers to constants
+
+        println!("spawning bullet {} player {player:?} frame {} last {}",rollback.0, info.current, info.last);
+        let velocity = Velocity {
+            linvel: gun_velocity.linvel + forward * BULLET_VELOCITY,
+            angvel: Vec3::ZERO,
+        };
+
+        let momentum = MASS * velocity.linvel;
+        gun_velocity.linvel -= momentum / crate::player::gun::MASS;
+
+        let spawn = SpawnBullet {
+            rollback,
+            transform,
+            velocity,
+            index: None,
+        };
+        commands.add(spawn3(make_bullet(spawn)))
+    }
+}
+
+pub fn bullet_collision_system(
+    mut collision_events: EventReader<CollisionEvent>,
+    mut bullets: Query<(Entity, &mut Exists, &Velocity), With<Bullet>>,
+    player_parts: Query<(&crate::player::Player, &crate::player::DamageCoeficient)>,
+    mut players: Query<(&crate::player::Player, &mut crate::player::Health), With<crate::player::Body>>,
+) {
+    for event in collision_events.read() {
+        let CollisionEvent::Started(e1, e2, _flags) = event else{continue};
+        println!("collision event {e1:?} {e2:?}");
+
+        let Ok((bullet, mut exists, velocity)) = bullets.get_mut(*e2) else{
+            println!("e2 was not bullet");
+            continue
+        };
+
+        exists.0 = false;
         
-                println!("spawning bullet {} player {player:?} frame {} last {}",rollback.0, info.current, info.last);
-                let velocity = Velocity::linear(forward * 50.0);
-                let spawn = SpawnBullet {
-                    rollback,
-                    transform,
-                    velocity,
-                    index: None,
-                };
-                commands.add(spawn3(make_bullet(spawn)))
-            }else{
-                warn!("player is shooting but is not spawned!");
-            }
-        }
+        let Ok((player,damage)) = player_parts.get(*e1) else{
+            println!("collision with something else");
+            continue
+        };
+        let Some((player, mut health)) = players.iter_mut().find(|(p,_)| **p==*player) else{
+            panic!("player {player:?} part {e1:?} does not have a body");
+        };
+
+        let velocity = velocity.linvel.length();    //TODO: instead use relative velocity with respect to collided player
+        let damage = damage.0*velocity;
+        health.0 -= damage;
+
+        println!("bullet {bullet:?} collision with player {player:?} part {e1:?} : velocity {velocity} damage {damage} remaining health {}",health.0);
     }
 }
 
@@ -67,8 +119,6 @@ pub fn despawn_bullet_system(
 }
 
 pub fn make_bullet(event: SpawnBullet) -> impl Fn(ResMut<Assets<Mesh>>, ResMut<Assets<StandardMaterial>>, Commands) -> Entity {
-    let radius = 0.1;
-
     let rollback = event.rollback;
     let transform = event.transform;
     let velocity = event.velocity;
@@ -86,10 +136,7 @@ pub fn make_bullet(event: SpawnBullet) -> impl Fn(ResMut<Assets<Mesh>>, ResMut<A
         }
 
         let mesh = mesh_assets  //TODO: cache mesh and material handles
-            .add(Mesh::try_from(shape::Icosphere {
-                radius,
-                subdivisions: 5,
-            }).unwrap());
+            .add(Sphere::new(RADIUS));
         let material = material_assets
             .add(StandardMaterial {
                 base_color: Color::RED,
@@ -98,8 +145,9 @@ pub fn make_bullet(event: SpawnBullet) -> impl Fn(ResMut<Assets<Mesh>>, ResMut<A
                 ..default()
             });
 
-        commands.spawn((
+        let id = commands.spawn((
             (Bullet,
+            Name::new("Bullet"),
             RigidBody::Dynamic,
             Ccd::enabled(),
             SpatialBundle {
@@ -114,10 +162,16 @@ pub fn make_bullet(event: SpawnBullet) -> impl Fn(ResMut<Assets<Mesh>>, ResMut<A
             rollback,
             crate::networking::EntityType::Bullet,),
 
-            Collider::ball(radius),
+            Collider::ball(RADIUS),
+            ActiveEvents::COLLISION_EVENTS,
             Restitution::coefficient(0.7),
             Friction::coefficient(0.1),
-            ColliderMassProperties::Density(1.0),
+            //ColliderMassProperties::Density(1.0),
+            AdditionalMassProperties::MassProperties(MassProperties {
+                mass: MASS,
+                principal_inertia: Vec3::splat(ANGULAR_INERTIA),
+                ..default()
+            }),
             ExternalForce::default(),
             //ExternalImpulse::default(),
             Damping {
@@ -130,6 +184,8 @@ pub fn make_bullet(event: SpawnBullet) -> impl Fn(ResMut<Assets<Mesh>>, ResMut<A
                 material,
                 ..default()
             });
-        }).id()
+        }).id();
+        println!("spawning bullet {id:?}");
+        id
     }
 }

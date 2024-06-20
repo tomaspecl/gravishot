@@ -18,11 +18,7 @@ use bevy_gravirollback::new::systems::*;
 
 use bevy::prelude::*;
 
-use bevy::utils::HashMap;
-
 use serde::{Serialize, Deserialize};
-
-
 
 /// Sent from Client to Server
 #[derive(Serialize, Deserialize)]
@@ -41,7 +37,7 @@ pub enum ServerMessage {
     /// Init data for the Client, sent by the Server
     ConnectionGranted(Player, Map, States),
     /// Info about newly connected Client sent to all Clients
-    Connected(Player, RollbackID),
+    Connected(Player),
     /// Info about disconnected Client sent to all Clients
     Disconnected(Player),
     //DespawnPlayer(Player),
@@ -50,7 +46,8 @@ pub enum ServerMessage {
     /// Sent to the Client when they are sending future Inputs.
     /// Contains the last Server frame
     SlowDown(u64),
-    StateSummary(u64, Snapshot, PlayerMap)
+    StateSummary(u64, Snapshot),
+    MapUpdate(Map),
 }
 
 /*
@@ -74,12 +71,7 @@ pub struct NetConfig {
 
 #[derive(Resource, Reflect, Default, Clone, Copy)]
 #[reflect(Resource)]
-pub struct LocalPlayer(pub Player);
-
-/// Map from Player
-#[derive(Resource, Reflect, Serialize, Deserialize, Default, Clone)]
-#[reflect(Resource)]
-pub struct PlayerMap(pub HashMap<Player, RollbackID>);
+pub struct LocalPlayer(pub Player); //TODO: is this needed?
 
 pub struct NetworkPlugin;
 
@@ -94,9 +86,10 @@ impl Plugin for NetworkPlugin {
         .init_resource::<Inputs>()
         .init_resource::<LocalInput>()
         .init_resource::<Rollback<Inputs>>()
+        .init_resource::<crate::map::Map>()
         .register_type::<NetConfig>()
         .register_type::<LocalPlayer>()
-        .register_type::<PlayerMap>()
+        .register_type::<crate::player::PlayerParts>()
         .register_type::<EntityType>()
         .register_type::<RollbackID>()
         .register_type::<Inputs>()
@@ -105,6 +98,8 @@ impl Plugin for NetworkPlugin {
         .register_type::<RollbackMap>()
         .register_type::<Rollback<Inputs>>()
         .register_type::<Rollback<PhysicsBundle>>()
+        .register_type::<Rollback<crate::player::HeadData>>()
+        .register_type::<crate::map::Map>()
         //.register_type::<Snapshots::<MyState>>()
         .add_plugins((
             bevy_quinnet::client::QuinnetClientPlugin {
@@ -123,6 +118,8 @@ impl Plugin for NetworkPlugin {
         //TODO: this is not really networking
         .add_systems(RollbackSchedule,(
             PhysicsBundle::get_default_rollback_systems(),
+            crate::player::Health::get_default_rollback_systems(),
+            crate::player::HeadData::get_default_rollback_systems(),
             restore_resource::<Inputs>.in_set(RollbackSet::RestoreInputs),
         ));
     }
@@ -134,5 +131,6 @@ impl Plugin for NetworkPlugin {
 #[derive(Component, Reflect, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, Debug)]
 pub enum EntityType {
     Player(Player),    //TODO: either dont use as component or dont include duplicated data
+    Gun(Option<Player>),
     Bullet,             // -> otherwise player will contain EntityType::Player(Player(id)) and Player(id)
 }

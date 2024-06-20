@@ -12,7 +12,6 @@ use bevy_gravirollback::new::*;
 
 use bevy::prelude::*;
 
-use bevy::utils::Entry;
 use bevy_quinnet::client::{Client, connection::ConnectionConfiguration, certificate::CertificateVerificationMode};
 
 use std::net::ToSocketAddrs;
@@ -23,7 +22,6 @@ pub struct ClientMarker;
 pub fn handle(
     mut client: ResMut<Client>,
     //local_player: Option<Res<super::LocalPlayer>>,      //TODO: can this fail?
-    mut players: ResMut<super::PlayerMap>,
     //mut net_config: ResMut<super::NetConfig>,
     mut commands: Commands,
     mut state: ResMut<NextState<crate::gamestate::GameState>>,
@@ -33,7 +31,7 @@ pub fn handle(
     mut snapshot_info: ResMut<SnapshotInfo>,
     mut input_event: EventWriter<UpdateInputEvent>,
     mut state_event_writer: EventWriter<UpdateStateEvent<State>>,
-    mut rollback_map: ResMut<RollbackMap>,
+    rollback_map: ResMut<RollbackMap>,
 ) {
     while let Some(msg) = client.connection_mut().try_receive_message::<ServerMessage>() {
         match msg {
@@ -59,17 +57,12 @@ pub fn handle(
 
                 state.set(crate::gamestate::GameState::Running);
             },
-            ServerMessage::Connected(player, rollback) => {
-                println!("Player {} connected with rollback {}",player.0,rollback.0);
-                if let Entry::Vacant(e) = players.0.entry(player) {
-                    e.insert(rollback);
-                }else{
-                    panic!("player already exists!")
-                }
+            ServerMessage::Connected(player) => {
+                println!("Player {player:?} connected");
+                //TODO: store connected players somewhere
             },
             ServerMessage::Disconnected(player) => {
                 println!("Player {} disconneted",player.0);
-                players.0.remove(&player);
                 commands.add(crate::player::despawn_player(player));
             },
             /*ServerMessage::SpawnPlayer { player, rollback, transform } => {
@@ -96,26 +89,23 @@ pub fn handle(
                     });
                 }*/
             }
-            ServerMessage::StateSummary(frame, snapshot_summary, players_summary) => {
+            ServerMessage::StateSummary(frame, snapshot_summary) => {
                 let current = snapshot_info.current;
                 let diff = current as i64 - frame as i64;
                 println!("got summary frame {frame} current {current} diff {diff}");
-                *players = players_summary; //TODO: this might not be enough
 
                 let inputs = snapshot_summary.inputs.0;
                 let states = snapshot_summary.states;
 
-                let mut deleted = Vec::new();
                 for (id, &entity) in &rollback_map.0 {
                     if !states.contains_key(id) {
                         //println!("got summary despawning {entity:?}");
                         commands.entity(entity).despawn_recursive();
-                        deleted.push(entity);
                     }
                 }
-                for e in deleted {
-                    rollback_map.remove(e);
-                }
+                //for e in deleted {
+                //    rollback_map.remove(e);
+                //}
 
                 input_event.send_batch(inputs.into_iter().map(|(player, input)| UpdateInputEvent { frame, player, input }));
                 state_event_writer.send_batch(states.into_iter().map(|(id, state)| UpdateStateEvent {frame, id, state}));
@@ -257,6 +247,10 @@ pub fn handle(
                 if should_return {return}
                 */
             },
+            ServerMessage::MapUpdate(map) => {
+                println!("map update");
+                commands.insert_resource(map);
+            }
         }
     }
 }

@@ -16,7 +16,7 @@ impl Plugin for GravityPlugin {
         .insert_resource(RapierConfiguration {
             gravity: Vect::ZERO,
             timestep_mode: TimestepMode::Fixed { dt: 0.001*PHYSICS_TIMESTEP_MS as f32, substeps: 1 },
-            ..default()
+            ..RapierConfiguration::new(1.0)
         })
         .register_type::<AtractedByGravity>()
         .register_type::<CreatesGravity>()
