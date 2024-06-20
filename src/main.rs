@@ -50,7 +50,7 @@ fn main() {
     }
     
     #[cfg(feature="include_assets")] {
-        default_plugins = default_plugins.add_before::<bevy::asset::AssetPlugin, _>(bevy_embedded_assets::EmbeddedAssetPlugin::default());
+        app.add_plugins(bevy_embedded_assets::EmbeddedAssetPlugin { mode: bevy_embedded_assets::PluginMode::ReplaceDefault });
     }
     
     app.add_plugins(default_plugins);
