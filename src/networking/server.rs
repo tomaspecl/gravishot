@@ -209,7 +209,7 @@ pub fn handle(
 
 pub fn send_state_summary(
     server: Res<Server>,
-    query: Query<(&RollbackID, &Rollback<Exists>, &Rollback<PhysicsBundle>, Option<(&Rollback<crate::player::HeadData>, &Rollback<crate::player::Health>)>, &super::EntityType)>,
+    query: Query<(&RollbackID, &Rollback<Exists>, &Rollback<PhysicsBundle>, Option<(&Rollback<crate::player::HeadData>, &Rollback<crate::player::Health>)>, Option<&crate::player::Player>, &super::EntityType)>,
     inputs: Res<Rollback<Inputs>>,
     snapshot_info: Res<SnapshotInfo>,
     time: Res<Time>,
@@ -227,7 +227,7 @@ pub fn send_state_summary(
         let index = snapshot_info.index(frame);
 
         let mut states = HashMap::new();
-        for (&id, exists, physics_bundle, player_data, &entity_type) in &query {
+        for (&id, exists, physics_bundle, player_data, player, &entity_type) in &query {
             //TODO: this also sends entities present in current frame that were not yet spawned in the past frame
             //this will then cause a crash when the Client receives it, it will spawn the entity before it should be spawned
             //and then later it will receive the spawn signal that will try to spawn the entity second time -> crash
@@ -236,7 +236,8 @@ pub fn send_state_summary(
             if !exists.0[index].0 {continue}
 
             let player_data = player_data.map(|x| (x.0.0[index].clone(),x.1.0[index].clone()));
-            states.insert(id, State(physics_bundle.0[index].clone(), player_data, entity_type));
+            let player = player.map(|x| x.clone());
+            states.insert(id, State(physics_bundle.0[index].clone(), player_data, player, entity_type));
         }
 
         let snapshot = Snapshot {

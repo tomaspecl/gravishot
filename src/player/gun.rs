@@ -58,7 +58,7 @@ pub fn make_gun(event: SpawnGun) -> impl Fn(ResMut<Assets<Mesh>>, ResMut<Assets<
             Exists(true),
             exists,
             rollback,
-            crate::networking::EntityType::Gun(player_id),
+            crate::networking::EntityType::Gun,
             RigidBody::Dynamic,
             AdditionalMassProperties::MassProperties(MassProperties {
                 mass: MASS,
@@ -92,7 +92,6 @@ pub fn connect_joints(
 ) {
     for (e,player) in &gun_no_joint {
         //TODO: this will crash when player1 joins and exists, then player2 joins -> player2 will receive State(EntityType::Gun(Player(1))) even when it should be EntityType(None)
-        //EntityType should not contain that information as it is duplicit
         let (entity,_,mut parts) = players.iter_mut().find(|(_,p,_)| **p==*player).expect("the player holding this gun should exist");
 
         let joint = SphericalJointBuilder::new()

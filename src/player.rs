@@ -237,7 +237,7 @@ pub fn make_player(event: SpawnPlayer) -> impl Fn(Option<Res<crate::networking::
             rollback_body,
             (Body,
             Name::new("Player Body"),),
-            crate::networking::EntityType::Player(player_id),
+            crate::networking::EntityType::Player,
         ));
 
         let is_local = local_player.map_or(false,|local| local==player_id);

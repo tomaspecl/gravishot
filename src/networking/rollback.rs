@@ -57,7 +57,7 @@ impl RollbackCapable for PhysicsBundle {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct State(pub PhysicsBundle, pub Option<(HeadData,Health)>, pub EntityType);
+pub struct State(pub PhysicsBundle, pub Option<(HeadData,Health)>, pub Option<crate::player::Player>, pub EntityType);
 
 #[derive(Serialize, Deserialize)]
 pub struct States {
@@ -126,11 +126,12 @@ pub fn handle_update_state_event(
                 }
             }else{
                 println!("update_state_event spawning id {id:?}");
-                match state.2 {
-                    EntityType::Player(player) => {
-                        let data = state.1.clone().expect("can not update Player state without HeadData or Health");
+                let player = state.2;
+                match state.3 {
+                    EntityType::Player => {
+                        let data = state.1.clone().expect("can not spawn Player state without HeadData or Health");
                         commands.add(spawn3(crate::player::make_player(SpawnPlayer {
-                            player,
+                            player: player.expect("can not spawn Player state without Player"),
                             rollback_body: *id,
                             transform: state.0.transform,
                             velocity: state.0.velocity,
@@ -139,7 +140,7 @@ pub fn handle_update_state_event(
                             health: data.1,
                         })));
                     },
-                    EntityType::Gun(player) => commands.add(spawn3(crate::player::gun::make_gun(SpawnGun {
+                    EntityType::Gun => commands.add(spawn3(crate::player::gun::make_gun(SpawnGun {
                         player,
                         rollback_gun: *id,
                         transform: state.0.transform,

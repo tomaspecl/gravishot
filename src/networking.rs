@@ -130,7 +130,7 @@ impl Plugin for NetworkPlugin {
 /// of all Rollback entities and work with them.
 #[derive(Component, Reflect, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, Debug)]
 pub enum EntityType {
-    Player(Player),    //TODO: either dont use as component or dont include duplicated data
-    Gun(Option<Player>),
-    Bullet,             // -> otherwise player will contain EntityType::Player(Player(id)) and Player(id)
+    Player,
+    Gun,
+    Bullet,
 }
