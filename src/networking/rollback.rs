@@ -57,7 +57,7 @@ impl RollbackCapable for PhysicsBundle {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct State(pub PhysicsBundle, pub Option<(HeadData,Health)>, pub Option<crate::player::Player>, pub EntityType);
+pub struct State(pub PhysicsBundle, pub Option<(HeadData,Health)>, pub Option<crate::player::Player>, pub EntityType, /* Exists */ pub bool);
 
 #[derive(Serialize, Deserialize)]
 pub struct States {
@@ -103,6 +103,7 @@ pub fn handle_update_state_event(
         let update = frame<snapshot_info.last;
         if frame>snapshot_info.last {
             warn!("future update event frame {frame} last {}", snapshot_info.last);
+            //TODO: resend them like in handle_update_input_event
             continue;
         }
 

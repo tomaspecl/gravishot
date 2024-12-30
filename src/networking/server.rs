@@ -233,11 +233,11 @@ pub fn send_state_summary(
             //and then later it will receive the spawn signal that will try to spawn the entity second time -> crash
 
             //this should fix it:
-            if !exists.0[index].0 {continue}
+            let exists = exists.0[index];
 
             let player_data = player_data.map(|x| (x.0.0[index].clone(),x.1.0[index].clone()));
             let player = player.map(|x| x.clone());
-            states.insert(id, State(physics_bundle.0[index].clone(), player_data, player, entity_type));
+            states.insert(id, State(physics_bundle.0[index].clone(), player_data, player, entity_type, exists.0));
         }
 
         let snapshot = Snapshot {

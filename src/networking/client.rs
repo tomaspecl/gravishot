@@ -108,7 +108,7 @@ pub fn handle(
                 //}
 
                 input_event.send_batch(inputs.into_iter().map(|(player, input)| UpdateInputEvent { frame, player, input }));
-                state_event_writer.send_batch(states.into_iter().map(|(id, state)| UpdateStateEvent {frame, id, state}));
+                state_event_writer.send_batch(states.into_iter().filter(|(_,state)| state.4).map(|(id, state)| UpdateStateEvent {frame, id, state}));
 
                 /*
                 //TODO: move this into update event handler
