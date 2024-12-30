@@ -7,7 +7,7 @@ mod mainmenu;
 mod spawn_menu;
 mod healthbar;
 
-use crate::{map, player, networking, input, gravity, bullet};
+use crate::{map, player, networking, input, gravity, bullet, physics};
 
 use bevy_gravirollback::new::*;
 
@@ -178,6 +178,7 @@ impl Plugin for GameStatePlugin {
                     (
                         bullet::bullet_collision_system,
                         bullet::despawn_bullet_system,
+                        physics::physics_body_existance_system,
                     ).chain(),
                 ),
                 apply_deferred,
@@ -241,6 +242,7 @@ fn game_tick_condition(
 
 fn update_frame(mut info: ResMut<SnapshotInfo>) {
     let index = info.current_index();
+    //let index = info.index(info.last);    //TODO: maybe this should be used instead, or maybe a completely different way
     info.snapshots[index].modified = true;
 }
 

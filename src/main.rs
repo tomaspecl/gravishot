@@ -11,6 +11,7 @@ mod map;
 mod input;
 mod spawning;
 mod bullet;
+mod physics;
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
