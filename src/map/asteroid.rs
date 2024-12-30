@@ -177,6 +177,9 @@ pub fn wait_for_load(
                 let collider_shape = ComputedColliderShape::ConvexDecomposition(VHACDParameters {
                     //resolution: 128,
                     max_convex_hulls: 16384,
+                    convex_hull_approximation: false,
+                    plane_downsampling: 8,
+                    convex_hull_downsampling: 8,
                     ..default()
                 });
 
