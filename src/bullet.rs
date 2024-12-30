@@ -85,26 +85,31 @@ pub fn bullet_collision_system(
         let CollisionEvent::Started(e1, e2, _flags) = event else{continue};
         println!("collision event {e1:?} {e2:?}");
 
-        let Ok((bullet, mut exists, velocity)) = bullets.get_mut(*e2) else{
-            println!("e2 was not bullet");
+        let (bullet, mut exists, velocity, player_e) =
+        if let Ok((bullet, exists, velocity)) = bullets.get_mut(*e1) {
+            (bullet, exists, velocity,e2)
+        }else if let Ok((bullet, exists, velocity)) = bullets.get_mut(*e2) {
+            (bullet, exists, velocity,e1)
+        }else{
+            println!("e1 and e2 was not bullet");
             continue
         };
 
         exists.0 = false;
         
-        let Ok((player,damage)) = player_parts.get(*e1) else{
+        let Ok((player,damage)) = player_parts.get(*player_e) else{
             println!("collision with something else");
             continue
         };
         let Some((player, mut health)) = players.iter_mut().find(|(p,_)| **p==*player) else{
-            panic!("player {player:?} part {e1:?} does not have a body");
+            panic!("player {player:?} part {player_e:?} does not have a body");
         };
 
         let velocity = velocity.linvel.length();    //TODO: instead use relative velocity with respect to collided player
         let damage = damage.0*velocity;
         health.0 -= damage;
 
-        println!("bullet {bullet:?} collision with player {player:?} part {e1:?} : velocity {velocity} damage {damage} remaining health {}",health.0);
+        println!("bullet {bullet:?} collision with player {player:?} part {player_e:?} : velocity {velocity} damage {damage} remaining health {}",health.0);
     }
 }
 
