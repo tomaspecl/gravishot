@@ -37,4 +37,4 @@ once_cell = "1.17"
 bevy_quinnet = "0.7"
 bitmask-enum = "2"
 #bevy_gravirollback = { path = "../gravirollback", features = ["serialize"] }
-bevy_gravirollback = { git = "https://github.com/tomaspecl/bevy_gravirollback", rev = "777678946fba14d2cbaed8569960a21faec69771", features = ["serialize"] }
+bevy_gravirollback = { git = "https://github.com/tomaspecl/bevy_gravirollback", rev = "a89ea520be82d13bf16709b7b827dd194aa5435f", features = ["serialize"] }

@@ -724,7 +724,7 @@ dependencies = [
 [[package]]
 name = "bevy_gravirollback"
 version = "0.1.0"
-source = "git+https://github.com/tomaspecl/bevy_gravirollback?rev=777678946fba14d2cbaed8569960a21faec69771#777678946fba14d2cbaed8569960a21faec69771"
+source = "git+https://github.com/tomaspecl/bevy_gravirollback?rev=a89ea520be82d13bf16709b7b827dd194aa5435f#a89ea520be82d13bf16709b7b827dd194aa5435f"
 dependencies = [
  "bevy",
  "bevy_utils",
