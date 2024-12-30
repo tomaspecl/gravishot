@@ -8,6 +8,7 @@ use crate::networking::LocalPlayer;
 use crate::player::player_control::PlayerControl;
 use crate::player::Player;
 
+use bevy::ecs::event::ManualEventReader;
 use bevy_gravirollback::new::*;
 
 use bevy::prelude::*;
@@ -216,7 +217,7 @@ pub fn handle_local_input_event(
 
     if let Some(ref client) = client {  //send local Input to the Server
         if !input.is_empty() {
-            //println!("client sending input");
+            //println!("client sending input frame {frame}");
             client.connection().try_send_message_on(
                 bevy_quinnet::shared::channel::ChannelId::UnorderedReliable,
                 crate::networking::ClientMessage::Input(frame, input)
@@ -233,16 +234,19 @@ pub struct UpdateInputEvent {
 }
 
 pub fn handle_update_input_event(
-    mut input: EventReader<UpdateInputEvent>,
+    mut input: ResMut<Events<UpdateInputEvent>>,
+    mut event_reader: Local<ManualEventReader<UpdateInputEvent>>,
     mut inputs: ResMut<Rollback<Inputs>>,
     mut snapshot_info: ResMut<SnapshotInfo>,
     server: Option<Res<bevy_quinnet::server::Server>>,
 ) {
     let last = snapshot_info.last;
 
-    for event in input.read() {
-        let UpdateInputEvent { frame, player, input } = event.clone();
+    let mut events_to_resend = Vec::new();
 
+    for event in event_reader.read(&input) {
+        let UpdateInputEvent { frame, player, input } = event.clone();
+        //println!("handling input event frame {frame}");
         if input.is_empty() {
             continue;
         }
@@ -250,7 +254,8 @@ pub fn handle_update_input_event(
         //println!("update input event frame {frame} player {player:?} {input:?}");
         let update = frame<snapshot_info.last;
         if frame>last {
-            warn!("future update event frame {frame} last {last} player {player:?}");
+            warn!("future update event frame {frame} last {last} player {player:?}, saving for next frame");
+            events_to_resend.push(event.clone());
             continue;
         }
 
@@ -291,5 +296,9 @@ pub fn handle_update_input_event(
         }else{
             warn!("too old frame updated {frame} stored {} last {last} player {player:?}", snapshot.frame);
         }
+    }
+
+    for event in events_to_resend {
+        input.send(event);
     }
 }
