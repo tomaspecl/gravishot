@@ -4,16 +4,16 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use super::rollback::*;
-use super::rollback::{State, States, Snapshot};
+use super::rollback::{State, States, Snapshot, Rollback, LEN};
 use super::{ClientMessage, ServerMessage, NetConfig};
 use crate::input::{UpdateInputEvent, Inputs};
 
-use bevy_gravirollback::new::*;
+use bevy_gravirollback::prelude::*;
 
 use bevy::prelude::*;
 
 use bevy::utils::HashMap;
-use bevy_quinnet::server::{Server, ServerConfiguration, certificate::CertificateRetrievalMode, ConnectionLostEvent, ConnectionEvent};
+use bevy_quinnet::server::{QuinnetServer, ConnectionLostEvent, ConnectionEvent};
 
 use std::net::ToSocketAddrs;
 
@@ -28,13 +28,13 @@ impl Default for SummaryTimer {
 }
 
 pub fn handle(
-    mut server: ResMut<Server>,
+    mut server: ResMut<QuinnetServer>,
     //local_player: Option<Res<super::LocalPlayer>>,  //TODO: can this fail?
     players: Query<(&crate::player::Player, &RollbackID)>,
     
     mut commands: Commands,
 
-    snapshot_info: Res<SnapshotInfo>,
+    last_frame: Res<LastFrame>,
     //mut reader: Local<bevy::ecs::event::ManualEventReader<UpdateInputEvent<(Player, Input)>>>,
     mut input_event: EventWriter<UpdateInputEvent>,
     mut state_event: EventWriter<UpdateStateEvent<State>>,
@@ -45,7 +45,6 @@ pub fn handle(
     mut events_conn: EventReader<ConnectionEvent>,
     mut events_lost: EventReader<ConnectionLostEvent>,
 ) {
-    let now = snapshot_info.last;
     let endpoint = server.endpoint_mut();
 
     for event in events_conn.read() {
@@ -57,7 +56,7 @@ pub fn handle(
         let player = crate::player::Player(event.id);
         println!("Player {} disconnected",player.0);
         endpoint.try_broadcast_message(ServerMessage::Disconnected(player));
-        commands.add(crate::player::despawn_player(player));
+        commands.queue(crate::player::despawn_player(player));
     }
 
     //send local player input
@@ -85,7 +84,7 @@ pub fn handle(
     //handle received messages
     for client_id in endpoint.clients() {
         let player = crate::player::Player(client_id);
-        while let Some(msg) = endpoint.try_receive_message_from::<ClientMessage>(client_id) {
+        while let Some((_channel_id, msg)) = endpoint.try_receive_message_from::<ClientMessage>(client_id) {
             match msg {
                 ClientMessage::Connect => {
                     println!("Player {player:?} connected");
@@ -93,14 +92,14 @@ pub fn handle(
                         player,
                         map.clone(),
                         States {
-                            last_frame: now,
+                            last_frame: *last_frame,
                             frame_0_time: update_timer.frame_0_time,
                         },
                     ));
                     endpoint.try_broadcast_message(ServerMessage::Connected(player));
                 },
                 ClientMessage::Input(frame, input) => {
-                    println!("received input frame {frame}");
+                    println!("received input {frame:?}");
 
                     input_event.send(UpdateInputEvent {
                         frame,
@@ -208,23 +207,23 @@ pub fn handle(
 }
 
 pub fn send_state_summary(
-    server: Res<Server>,
+    mut server: ResMut<QuinnetServer>,
     query: Query<(&RollbackID, &Rollback<Exists>, &Rollback<PhysicsBundle>, Option<(&Rollback<crate::player::HeadData>, &Rollback<crate::player::Health>)>, Option<&crate::player::Player>, &super::EntityType)>,
     inputs: Res<Rollback<Inputs>>,
-    snapshot_info: Res<SnapshotInfo>,
+    last_frame: Res<LastFrame>,
     time: Res<Time>,
     mut timer: Local<SummaryTimer>,
 ) {
     if timer.0.tick(time.delta()).just_finished() {
         //println!("sending summary");
-        let endpoint = server.endpoint();
+
         //do not send the latest snapshot, instead send old, that way it is likely not going to change anymore
-        let offset = SNAPSHOTS_LEN as u64 / 4;
-        let frame = if snapshot_info.last > offset {
-            snapshot_info.last - offset
+        let offset = LEN as u64 / 4;
+        let frame = if last_frame.0 >= offset {
+            last_frame.0 - offset
         }else{return};
         
-        let index = snapshot_info.index(frame);
+        let index = index::<LEN>(frame);
 
         let mut states = HashMap::new();
         for (&id, exists, physics_bundle, player_data, player, &entity_type) in &query {
@@ -237,27 +236,31 @@ pub fn send_state_summary(
 
             let player_data = player_data.map(|x| (x.0.0[index].clone(),x.1.0[index].clone()));
             let player = player.map(|x| x.clone());
-            states.insert(id, State(physics_bundle.0[index].clone(), player_data, player, entity_type, exists.0));
+            states.insert(id, State(physics_bundle.0[index].clone(), player_data, player, entity_type, exists));
         }
 
         let snapshot = Snapshot {
             states,
             inputs: inputs.0[index].clone(),
         };
-        endpoint.try_broadcast_message(ServerMessage::StateSummary(frame, snapshot))
+        server.endpoint_mut().try_broadcast_message(ServerMessage::StateSummary(Frame(frame), snapshot))
     }
 }
 
 pub fn start(
-    mut server: ResMut<Server>,
+    mut server: ResMut<QuinnetServer>,
     config: Res<NetConfig>,
 ) {
     let addr = config.ip_port.to_socket_addrs().unwrap().next().unwrap();
+
     println!("socket: {addr}");
+    
+    use bevy_quinnet::shared::channels::{ChannelType, ChannelsConfiguration};
     server.start_endpoint(
-        ServerConfiguration::from_addr(addr),
-        CertificateRetrievalMode::GenerateSelfSigned {
+        bevy_quinnet::server::ServerEndpointConfiguration::from_addr(addr),
+        bevy_quinnet::server::certificate::CertificateRetrievalMode::GenerateSelfSigned {
             server_hostname: "GraviShot server".to_string(),    //TODO: allow manually setting this
         },
+        ChannelsConfiguration::from_types(vec![ChannelType::OrderedReliable, ChannelType::UnorderedReliable]).unwrap()
     ).unwrap();
 }

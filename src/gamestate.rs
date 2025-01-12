@@ -9,7 +9,7 @@ mod healthbar;
 
 use crate::{map, player, networking, input, gravity, bullet, physics};
 
-use bevy_gravirollback::new::*;
+use bevy_gravirollback::prelude::*;
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
@@ -110,14 +110,14 @@ impl Plugin for GameStatePlugin {
                     player::player_control::center_cursor.run_if(player::player_control::is_first_person),
 
                     (
-                        input::get_local_input.run_if(game_tick_condition),
+                        input::get_local_input.run_if(GAME_TICK_CONDITION),
 
                         spawn_menu::ui.run_if(not(player::local_player_exists)),
                         healthbar::ui.run_if(player::local_player_exists),
                     ).in_set(HandleIO::LocalInput),
 
                     (
-                        input::handle_local_input_event.run_if(game_tick_condition),
+                        input::handle_local_input_event.run_if(GAME_TICK_CONDITION),
                         /*(
                             spawning::handle_local_spawn_event,
                             spawning::handle_request_spawn_event.run_if(resource_exists::<networking::server::ServerMarker>()),
@@ -149,21 +149,16 @@ impl Plugin for GameStatePlugin {
 
             (
                 (
-                    update_frame.run_if(game_tick_condition),
-                    (
-                        networking::rollback::clear_inputs,
-                        (
-                            input::handle_update_input_event,
-                            //spawning::handle_update_spawn_event,
-                        ),
-                    ).chain(),
+                    update_frame,
+                    input::handle_update_input_event,
+                    //spawning::handle_update_spawn_event,
                     networking::rollback::handle_update_state_event,
                 ).in_set(HandleIO::ProcessChanges),
             ).run_if(in_state(GameState::Running)),
         ));
 
         app
-        .add_systems(RollbackSchedule,
+        .add_systems(RollbackUpdate,
             (
                 (   //CorePreUpdate
                     gravity::force_reset,
@@ -199,22 +194,11 @@ impl Plugin for GameStatePlugin {
                         RapierPhysicsPlugin::<NoUserData>::get_systems(PhysicsSet::StepSimulation),
                         RapierPhysicsPlugin::<NoUserData>::get_systems(PhysicsSet::Writeback),
                         (bevy::transform::systems::propagate_transforms, bevy::transform::systems::sync_simple_transforms),
-                        //bevy::transform::TransformSystem::TransformPropagate,  //TODO: there is no TransformPropagate
                     ).chain(),
                     bevy_rapier3d::plugin::systems::sync_removals,
                 )
-            ).chain().in_set(RollbackSet::Update)
+            ).chain().in_set(RollbackUpdateSet::Update)
         )
-        /* .add_systems(Update,    //TODO: disable the default configuration by gravirollback plugin
-            (
-                apply_deferred,
-                bevy_gravirollback::new::systems::run_rollback_schedule_system,
-                apply_deferred,
-            )
-            .chain()
-            .in_set(RollbackProcessSet::RunRollbackSchedule)
-            .run_if(in_state(GameState::Running))
-        )*/
         .configure_sets(Update, RollbackProcessSet::RunRollbackSchedule.run_if(in_state(GameState::Running)));
     }
 }
@@ -226,27 +210,21 @@ pub struct UpdateTimer {
     pub frame_0_time: Duration,
 }
 
-fn game_tick_condition(
-    timer: Res<UpdateTimer>,
-    info: Res<SnapshotInfo>,
-) -> bool {
-    assert!(info.current==info.last);
+const GAME_TICK_CONDITION: for<'a> fn(Res<'a, WantedFrame>) -> bool = resource_changed::<WantedFrame>;
 
+fn update_frame(
+    timer: Res<UpdateTimer>,
+    mut wanted: ResMut<WantedFrame>,
+) {
     let delay = timer.delay;
     let frame0 = timer.frame_0_time;
     let needed_frame = ((SystemTime::now().duration_since(UNIX_EPOCH).unwrap() - frame0).as_millis() / delay as u128) as u64;
-    if needed_frame > info.last {
-        true
-    }else{false}
+    if needed_frame > wanted.0 {
+        wanted.as_mut().0 += 1;
+    }
 }
 
-fn update_frame(mut info: ResMut<SnapshotInfo>) {
-    let index = info.current_index();
-    //let index = info.index(info.last);    //TODO: maybe this should be used instead, or maybe a completely different way
-    info.snapshots[index].modified = true;
-}
-
-fn change_state<S: States>(state: S) -> impl Fn(ResMut<NextState<S>>) {
+fn change_state<S: bevy::state::state::FreelyMutableState>(state: S) -> impl Fn(ResMut<NextState<S>>) {
     move |mut next_state: ResMut<NextState<S>>| {
         next_state.set(state.clone());
     }

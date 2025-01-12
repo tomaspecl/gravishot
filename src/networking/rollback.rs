@@ -9,8 +9,7 @@ use crate::player::gun::SpawnGun;
 use crate::player::{Health, HeadData, SpawnPlayer};
 use crate::input::Inputs;
 
-use bevy_gravirollback::new::for_user::*;
-use bevy_gravirollback::new::*;
+use bevy_gravirollback::prelude::*;
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
@@ -22,6 +21,10 @@ use serde::{Serialize, Deserialize};
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
+
+pub const LEN: usize = 128;
+
+pub type Rollback<T> = bevy_gravirollback::Rollback<T,LEN>;
 
 pub static ROLLBACK_ID_COUNTER: RollbackIdCounter = RollbackIdCounter(AtomicU64::new(0));
 pub struct RollbackIdCounter(pub AtomicU64);
@@ -57,11 +60,11 @@ impl RollbackCapable for PhysicsBundle {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct State(pub PhysicsBundle, pub Option<(HeadData,Health)>, pub Option<crate::player::Player>, pub EntityType, /* Exists */ pub bool);
+pub struct State(pub PhysicsBundle, pub Option<(HeadData,Health)>, pub Option<crate::player::Player>, pub EntityType, pub Exists);
 
 #[derive(Serialize, Deserialize)]
 pub struct States {
-    pub last_frame: u64,    //maybe this type should be defined by bevy_gravirollback
+    pub last_frame: LastFrame,
     pub frame_0_time: Duration,
 }
 
@@ -76,42 +79,35 @@ pub struct Snapshot {
 
 #[derive(Event)]
 pub struct UpdateStateEvent<S> {
-    pub frame: u64,
+    pub frame: Frame,
     pub id: RollbackID,
     pub state: S,
-}
-
-pub fn clear_inputs(
-    snapshot_info: Res<SnapshotInfo>,
-    mut inputs: ResMut<Rollback<Inputs>>,
-) {
-    let index = snapshot_info.index(snapshot_info.last);
-    inputs.0[index].0.clear();
 }
 
 //pub struct FutureUpdates(Vec<>);
 
 pub fn handle_update_state_event(
     mut events: EventReader<UpdateStateEvent<State>>,
-    mut snapshot_info: ResMut<SnapshotInfo>,
+    last_frame: Res<LastFrame>,
+    frames: Res<Rollback<Frame>>,
+    mut modified: ResMut<Rollback<Modified>>,
     rollback_map: Res<RollbackMap>,
     mut query: Query<(&mut Rollback<PhysicsBundle>, Option<(&mut Rollback<HeadData>, &mut Rollback<Health>)>)>,
     mut commands: Commands,
 ) {
     for UpdateStateEvent { frame, id, state } in events.read() {
-        let frame = *frame;
-        let update = frame<snapshot_info.last;
-        if frame>snapshot_info.last {
-            warn!("future update event frame {frame} last {}", snapshot_info.last);
+        let frame = frame;
+        let update = frame.0 < last_frame.0;
+        if frame.0 > last_frame.0 {
+            warn!("future update event {frame:?} {last_frame:?}");
             //TODO: resend them like in handle_update_input_event
             continue;
         }
 
-        let index = snapshot_info.index(frame);
-        let snapshot = &mut snapshot_info.snapshots[index];
-        if snapshot.frame == frame {
+        let index = index::<LEN>(frame.0);
+        if frames[index].0 == frame.0 {
             //insert this state
-            snapshot.modified |= update;
+            modified[index].0 |= update;
             //println!("update_state_event id {id:?}");
             if let Some(&entity) = rollback_map.0.get(id) {
                 //println!("update_state_event updating");
@@ -131,7 +127,7 @@ pub fn handle_update_state_event(
                 match state.3 {
                     EntityType::Player => {
                         let data = state.1.clone().expect("can not spawn Player state without HeadData or Health");
-                        commands.add(spawn3(crate::player::make_player(SpawnPlayer {
+                        commands.queue(spawn3(crate::player::make_player(SpawnPlayer {
                             player: player.expect("can not spawn Player state without Player"),
                             rollback_body: *id,
                             transform: state.0.transform,
@@ -141,14 +137,14 @@ pub fn handle_update_state_event(
                             health: data.1,
                         })));
                     },
-                    EntityType::Gun => commands.add(spawn3(crate::player::gun::make_gun(SpawnGun {
+                    EntityType::Gun => commands.queue(spawn3(crate::player::gun::make_gun(SpawnGun {
                         player,
                         rollback_gun: *id,
                         transform: state.0.transform,
                         velocity: state.0.velocity,
                         index: Some(index),
                     }))),
-                    EntityType::Bullet => commands.add(spawn3(crate::bullet::make_bullet(SpawnBullet {
+                    EntityType::Bullet => commands.queue(spawn3(crate::bullet::make_bullet(SpawnBullet {
                         rollback: *id,
                         transform: state.0.transform,
                         velocity: state.0.velocity,

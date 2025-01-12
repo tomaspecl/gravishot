@@ -34,18 +34,13 @@ fn main() {
             primary_window: Some(Window {
                 title: "GraviShot".to_string(),
                 resizable: true,
-                cursor: bevy::window::Cursor {
-                    visible: true,
-                    grab_mode: bevy::window::CursorGrabMode::Locked,
-                    ..default()
-                },
                 mode: bevy::window::WindowMode::Windowed,
                 ..default()
             }),
             ..default()
         });
         app.insert_resource(AmbientLight {
-            color: Color::rgb(1.0,1.0,1.0),
+            color: Color::srgb(1.0,1.0,1.0),
             brightness: 300.0,
         });
     }
@@ -87,8 +82,6 @@ fn main() {
         gamestate::GameStatePlugin,
         networking::NetworkPlugin,
     ))
-    
-    .add_systems(Update,bevy::window::close_on_esc)
 
     .run();
 }
@@ -102,12 +95,15 @@ fn setup_server(
 fn setup(
     mut commands: Commands,
     mut window: Query<&mut Window, With<bevy::window::PrimaryWindow>>,
+    mut rapier_config: Query<&mut RapierConfiguration>,
 ) {
     window.single_mut().present_mode = bevy::window::PresentMode::AutoNoVsync;
 
-    commands.spawn(PointLightBundle {
-        transform: Transform::from_xyz(4.0, 8.0, 4.0),
-        point_light: PointLight::default(),
-        ..default()
-    });
+    let mut rapier_config = rapier_config.single_mut();
+    rapier_config.gravity = Vec3::ZERO;
+
+    commands.spawn((
+        PointLight::default(),
+        Transform::from_xyz(4.0, 8.0, 4.0)
+    ));
 }

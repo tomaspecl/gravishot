@@ -5,14 +5,14 @@
 
 use crate::input::UpdateInputEvent;
 use super::rollback::*;
-use super::rollback::State;
+use super::rollback::{State, Rollback};
 use super::{ClientMessage, ServerMessage};
 
-use bevy_gravirollback::new::*;
+use bevy_gravirollback::prelude::*;
 
 use bevy::prelude::*;
 
-use bevy_quinnet::client::{Client, connection::ConnectionConfiguration, certificate::CertificateVerificationMode};
+use bevy_quinnet::client::{QuinnetClient, certificate::CertificateVerificationMode};
 
 use std::net::ToSocketAddrs;
 
@@ -20,7 +20,7 @@ use std::net::ToSocketAddrs;
 pub struct ClientMarker;
 
 pub fn handle(
-    mut client: ResMut<Client>,
+    mut client: ResMut<QuinnetClient>,
     //local_player: Option<Res<super::LocalPlayer>>,      //TODO: can this fail?
     //mut net_config: ResMut<super::NetConfig>,
     mut commands: Commands,
@@ -28,12 +28,14 @@ pub fn handle(
 
     mut update_timer: ResMut<crate::gamestate::UpdateTimer>,
 
-    mut snapshot_info: ResMut<SnapshotInfo>,
+    mut current_frame: ResMut<Frame>,
+    mut last_frame: ResMut<LastFrame>,
+    mut frames: ResMut<Rollback<Frame>>,
     mut input_event: EventWriter<UpdateInputEvent>,
     mut state_event_writer: EventWriter<UpdateStateEvent<State>>,
     rollback_map: ResMut<RollbackMap>,
 ) {
-    while let Some(msg) = client.connection_mut().try_receive_message::<ServerMessage>() {
+    while let Some((_channel_id, msg)) = client.connection_mut().try_receive_message::<ServerMessage>() {
         match msg {
             //TODO: move ConnectionGranted in different GameState
             ServerMessage::ConnectionGranted(player, map, states) => {
@@ -45,15 +47,15 @@ pub fn handle(
                 commands.insert_resource(map);
                 
                 //TODO: sync our frame number with the server
-                let last = states.last_frame;
+                let last = states.last_frame.0;
                 let frame_0_time = states.frame_0_time;
                 update_timer.frame_0_time = frame_0_time;
 
-                snapshot_info.last = last;
-                snapshot_info.current = last;
-                let index = snapshot_info.index(last);
-                snapshot_info.snapshots[index].frame = last;
-                println!("client connected player {player:?} last frame {}", snapshot_info.last);
+                last_frame.0 = last;
+                current_frame.0 = last;
+                let last_index = index::<LEN>(last);
+                frames[last_index].0 = last;
+                println!("client connected player {player:?} {last_frame:?}");
 
                 state.set(crate::gamestate::GameState::Running);
             },
@@ -63,7 +65,7 @@ pub fn handle(
             },
             ServerMessage::Disconnected(player) => {
                 println!("Player {} disconneted",player.0);
-                commands.add(crate::player::despawn_player(player));
+                commands.queue(crate::player::despawn_player(player));
             },
             /*ServerMessage::SpawnPlayer { player, rollback, transform } => {
                 event_spawn.send(crate::player::SpawnPlayerEvent {
@@ -90,9 +92,8 @@ pub fn handle(
                 }*/
             }
             ServerMessage::StateSummary(frame, snapshot_summary) => {
-                let current = snapshot_info.current;
-                let diff = current as i64 - frame as i64;
-                println!("got summary frame {frame} current {current} diff {diff}");
+                let diff = current_frame.0 as i64 - frame.0 as i64;
+                println!("got summary {frame:?} current {:?} diff {diff}",*current_frame);
 
                 let inputs = snapshot_summary.inputs.0;
                 let states = snapshot_summary.states;
@@ -108,7 +109,7 @@ pub fn handle(
                 //}
 
                 input_event.send_batch(inputs.into_iter().map(|(player, input)| UpdateInputEvent { frame, player, input }));
-                state_event_writer.send_batch(states.into_iter().filter(|(_,state)| state.4).map(|(id, state)| UpdateStateEvent {frame, id, state}));
+                state_event_writer.send_batch(states.into_iter().filter(|(_,state)| state.4.0).map(|(id, state)| UpdateStateEvent {frame, id, state}));
 
                 /*
                 //TODO: move this into update event handler
@@ -255,27 +256,29 @@ pub fn handle(
     }
 }
 
-pub fn connect(mut client: ResMut<Client>, myconfig: Res<super::NetConfig>) {
+pub fn connect(mut client: ResMut<QuinnetClient>, myconfig: Res<super::NetConfig>) {
     let addr = myconfig.ip_port.to_socket_addrs().unwrap().next().unwrap();
 
     println!("socket: {addr}");
 
+    use bevy_quinnet::shared::channels::{ChannelType, ChannelsConfiguration};
     client.open_connection(
-        ConnectionConfiguration::from_addrs(addr,str::parse("0.0.0.0:0").unwrap()),
+        bevy_quinnet::client::connection::ClientEndpointConfiguration::from_addrs(addr,str::parse("0.0.0.0:0").unwrap()),
         CertificateVerificationMode::SkipVerification,
+        ChannelsConfiguration::from_types(vec![ChannelType::OrderedReliable, ChannelType::UnorderedReliable]).unwrap(),
     ).unwrap();
 }
 
 pub fn on_connect(
     mut events: EventReader<bevy_quinnet::client::connection::ConnectionEvent>,
-    client: Res<Client>
+    mut client: ResMut<QuinnetClient>
 ) {
     if let Some(connection) = events.read().next() {
         let client_id = connection.id;   //TODO: is this really client_id?
 
         println!("Joining with client_id {client_id}");
 
-        client.connection().try_send_message(ClientMessage::Connect);
+        client.connection_mut().try_send_message(ClientMessage::Connect);
     }
     events.clear();
 }

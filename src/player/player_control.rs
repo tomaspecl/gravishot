@@ -7,8 +7,9 @@ use crate::gravity::GravityVector;
 use crate::input::{Buttons, Inputs, MOUSE_SCALE};
 
 use bevy::prelude::*;
-use bevy::utils::petgraph::matrix_graph::Zero;
 use bevy_rapier3d::prelude::*;
+
+use bevy::color::palettes::css::*;
 
 #[derive(Resource, Reflect, Default)]
 #[reflect(Resource)]
@@ -39,9 +40,9 @@ pub fn change_player_control(
     if input.just_pressed(MouseButton::Middle) {
         control.first_person = !control.first_person;
         if control.first_person {
-            window.cursor.grab_mode = CursorGrabMode::Locked;
+            window.cursor_options.grab_mode = CursorGrabMode::Locked;
         }else{
-            window.cursor.grab_mode = CursorGrabMode::None;
+            window.cursor_options.grab_mode = CursorGrabMode::None;
         }
 
         for (mut camera, camera_type) in &mut camera {
@@ -98,7 +99,7 @@ pub fn movement_system(
     inputs: Res<Inputs>,
     mut player_body: Query<(Entity, &super::Player, &mut Transform, &Velocity, &GravityVector, &mut ExternalForce, &mut ExternalImpulse, &mut super::Standing, &mut Damping), (With<super::Body>, Without<super::Head>)>,
     mut player_head: Query<(&super::Player, &mut Transform), With<super::Head>>,
-    rapier_context: Res<RapierContext>,
+    rapier_context: ReadDefaultRapierContext,
     constants: Res<PlayerPhysicsConstants>,
     keyboard: Res<ButtonInput<KeyCode>>,
     mut jetpack: Local<bool>,
@@ -186,7 +187,7 @@ pub fn movement_system(
             }
         }
 
-        if !t.x.is_zero() || !t.z.is_zero() {
+        if t.x!=0.0 || t.z!=0.0 {
             let x = rot_head.x;
             let dx = x/10.0;
             rot_head.x -= dx;
@@ -306,11 +307,11 @@ pub fn movement_system(
 
                 let x0 = transform.translation;
                 gizmos.line(x0, x0+*transform.down(), Color::BLACK);
-                gizmos.line(x0, x0+ray_dir, Color::RED);
-                gizmos.line(_ground, _ground+ground_up, Color::BLUE);
-                gizmos.line(x0, x0+ground_right, Color::BLUE);
-                gizmos.line(x0, x0+ground_back, Color::BLUE);
-                gizmos.line(x0, x0+rot*Vec3::new(0.0,1.0,0.0), Color::GREEN);
+                gizmos.line(x0, x0+ray_dir, RED);
+                gizmos.line(_ground, _ground+ground_up, BLUE);
+                gizmos.line(x0, x0+ground_right, BLUE);
+                gizmos.line(x0, x0+ground_back, BLUE);
+                gizmos.line(x0, x0+rot*Vec3::new(0.0,1.0,0.0), GREEN);
 
                 let jump = t.y.max(0.0);
                 if jump!=0.0 {
@@ -345,7 +346,8 @@ pub fn read_result_system(controllers: Query<&KinematicCharacterControllerOutput
         desired_translation,
         effective_translation,
         collisions,
+        is_sliding_down_slope,
     } = p;
-    println!("Player moved by {effective_translation:?}, wanted move {desired_translation:?} and touches the ground: {grounded:?}");
+    println!("Player moved by {effective_translation:?}, wanted move {desired_translation:?} and touches the ground: {grounded:?}, sliding down slope {is_sliding_down_slope:?}");
     dbg!(collisions);
 }

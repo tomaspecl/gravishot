@@ -1,4 +1,4 @@
-use bevy_gravirollback::new::*;
+use bevy_gravirollback::prelude::*;
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;

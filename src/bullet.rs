@@ -6,12 +6,14 @@
 use crate::input::Inputs;
 use crate::gravity::AtractedByGravity;
 use crate::player::Player;
+use crate::networking::rollback::Rollback;
 
-use bevy_gravirollback::new::for_user::*;
-use bevy_gravirollback::new::*;
+use bevy_gravirollback::prelude::*;
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
+
+use bevy::color::palettes::css::*;
 
 use serde::{Serialize, Deserialize};
 
@@ -39,7 +41,8 @@ pub fn spawn_bullet_system(
     mut commands: Commands,
     inputs: Res<Inputs>,
     mut gun_query: Query<(&Player, &Transform, &mut Velocity, &mut crate::player::gun::Gun)>,
-    info: Res<SnapshotInfo>,
+    frame: Res<Frame>,
+    last_frame: Res<LastFrame>,
 ) {
     for (player, &transform, mut gun_velocity, mut gun) in &mut gun_query {
         gun.0 = gun.0.saturating_sub(1);
@@ -56,7 +59,7 @@ pub fn spawn_bullet_system(
         let forward = transform.forward();
         transform.translation += forward * 0.5; //TODO: move magic numbers to constants
 
-        println!("spawning bullet {} player {player:?} frame {} last {}",rollback.0, info.current, info.last);
+        println!("spawning bullet {} player {player:?} frame {frame:?} last {last_frame:?}",rollback.0);
         let velocity = Velocity {
             linvel: gun_velocity.linvel + forward * BULLET_VELOCITY,
             angvel: Vec3::ZERO,
@@ -71,7 +74,7 @@ pub fn spawn_bullet_system(
             velocity,
             index: None,
         };
-        commands.add(spawn3(make_bullet(spawn)))
+        commands.queue(spawn3(make_bullet(spawn)));
     }
 }
 
@@ -144,7 +147,7 @@ pub fn make_bullet(event: SpawnBullet) -> impl Fn(ResMut<Assets<Mesh>>, ResMut<A
             .add(Sphere::new(RADIUS));
         let material = material_assets
             .add(StandardMaterial {
-                base_color: Color::RED,
+                base_color: RED.into(),
                 perceptual_roughness: 0.3,
                 metallic: 1.0,
                 ..default()
@@ -155,10 +158,8 @@ pub fn make_bullet(event: SpawnBullet) -> impl Fn(ResMut<Assets<Mesh>>, ResMut<A
             Name::new("Bullet"),
             RigidBody::Dynamic,
             Ccd::enabled(),
-            SpatialBundle {
-                transform,
-                ..default()
-            },
+            transform,
+            Visibility::Visible,
             physics_bundle,
             exists,
             Exists(true),
@@ -184,11 +185,10 @@ pub fn make_bullet(event: SpawnBullet) -> impl Fn(ResMut<Assets<Mesh>>, ResMut<A
                 angular_damping: 1.0,
             },
         )).with_children(|parent| {
-            parent.spawn(PbrBundle {
-                mesh,
-                material,
-                ..default()
-            });
+            parent.spawn((
+                Mesh3d(mesh),
+                MeshMaterial3d(material),
+            ));
         }).id();
         println!("spawning bullet {id:?}");
         id

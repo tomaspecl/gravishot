@@ -1,4 +1,6 @@
-use bevy_gravirollback::new::*;
+use crate::networking::rollback::Rollback;
+
+use bevy_gravirollback::prelude::*;
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
@@ -36,7 +38,7 @@ pub fn make_gun(event: SpawnGun) -> impl Fn(ResMut<Assets<Mesh>>, ResMut<Assets<
 
     move |mut mesh_assets, mut material_assets, mut commands| {
         let mesh = mesh_assets.add(Cuboid::new(0.1, 0.1, 0.5));
-        let material = material_assets.add(Color::rgb(0.8, 0.7, 0.6));
+        let material = material_assets.add(Color::srgb(0.8, 0.7, 0.6));
 
         let mut physics_bundle = Rollback::<crate::networking::rollback::PhysicsBundle>::default();
         let mut exists = Rollback::<Exists>::default();
@@ -66,12 +68,9 @@ pub fn make_gun(event: SpawnGun) -> impl Fn(ResMut<Assets<Mesh>>, ResMut<Assets<
                 ..default()
             }),
             velocity,
-            PbrBundle {
-                mesh,
-                material,
-                transform,
-                ..default()
-            }
+            Mesh3d(mesh),
+            MeshMaterial3d(material),
+            transform,
         ));
 
         if let Some(player) = player_id {
@@ -128,7 +127,7 @@ pub fn update_joints(
     for (&player, mut joint) in &mut gun {
         let Some((_,&head)) = head.iter().find(|&(&player2,_)| player2==player) else{continue};
 
-        joint.data
+        joint.data.as_mut()
             .set_local_basis1(head.rotation)
             .set_motor_position(JointAxis::AngX, 0.0, stiffness, damping)
             .set_motor_position(JointAxis::AngY, 0.0, stiffness, damping);

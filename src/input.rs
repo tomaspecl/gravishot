@@ -3,16 +3,16 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::networking::rollback::ROLLBACK_ID_COUNTER;
+use crate::networking::rollback::{ROLLBACK_ID_COUNTER, Rollback, LEN};
 use crate::networking::LocalPlayer;
 use crate::player::player_control::PlayerControl;
 use crate::player::Player;
 
-use bevy::ecs::event::ManualEventReader;
-use bevy_gravirollback::new::*;
+use bevy_gravirollback::prelude::*;
 
 use bevy::prelude::*;
 
+use bevy::ecs::event::EventCursor;
 use bevy::utils::{HashMap, Entry};
 use bevy::input::mouse::MouseMotion;
 
@@ -200,27 +200,25 @@ pub fn get_local_input(
 pub fn handle_local_input_event(
     mut local_input: ResMut<LocalInput>,
     mut input_events: EventWriter<UpdateInputEvent>,
-    client: Option<Res<bevy_quinnet::client::Client>>,
-    snapshot_info: Res<SnapshotInfo>,
+    mut client: Option<ResMut<bevy_quinnet::client::QuinnetClient>>,
+    frame: Res<Frame>,
     local_player: Res<LocalPlayer>,
 ) {
     let local_player = local_player.0;
-    let frame = snapshot_info.last;
 
     let input = std::mem::take(&mut local_input.0);
 
     input_events.send(UpdateInputEvent {
-        frame,
+        frame: *frame,
         player: local_player,
         input: input.clone(),
     });
 
-    if let Some(ref client) = client {  //send local Input to the Server
+    if let Some(ref mut client) = client {  //send local Input to the Server
         if !input.is_empty() {
             //println!("client sending input frame {frame}");
-            client.connection().try_send_message_on(
-                bevy_quinnet::shared::channel::ChannelId::UnorderedReliable,
-                crate::networking::ClientMessage::Input(frame, input)
+            client.connection_mut().try_send_message_on(1, //UnorderedReliable
+                crate::networking::ClientMessage::Input(*frame, input)
             );
         }
     }
@@ -228,77 +226,76 @@ pub fn handle_local_input_event(
 
 #[derive(Event, Serialize, Deserialize, Clone)]
 pub struct UpdateInputEvent {
-    pub frame: u64,
+    pub frame: Frame,
     pub player: Player,
     pub input: Input,
 }
 
 pub fn handle_update_input_event(
-    mut input: ResMut<Events<UpdateInputEvent>>,
-    mut event_reader: Local<ManualEventReader<UpdateInputEvent>>,
+    mut events: ResMut<Events<UpdateInputEvent>>,
+    mut event_cursor: Local<EventCursor<UpdateInputEvent>>,
     mut inputs: ResMut<Rollback<Inputs>>,
-    mut snapshot_info: ResMut<SnapshotInfo>,
-    server: Option<Res<bevy_quinnet::server::Server>>,
+    last_frame: Res<LastFrame>,
+    frames: Res<Rollback<Frame>>,
+    mut modified: ResMut<Rollback<Modified>>,
+    mut server: Option<ResMut<bevy_quinnet::server::QuinnetServer>>,
 ) {
-    let last = snapshot_info.last;
-
     let mut events_to_resend = Vec::new();
 
-    for event in event_reader.read(&input) {
+    for event in event_cursor.read(&events) {
         let UpdateInputEvent { frame, player, input } = event.clone();
-        //println!("handling input event frame {frame}");
+        //println!("handling input event {frame:?}");
         if input.is_empty() {
             continue;
         }
 
-        //println!("update input event frame {frame} player {player:?} {input:?}");
-        let update = frame<snapshot_info.last;
-        if frame>last {
-            warn!("future update event frame {frame} last {last} player {player:?}, saving for next frame");
+        //println!("update input event {frame:?} player {player:?} {input:?}");
+        let update = frame.0 < last_frame.0;
+        if frame.0 > last_frame.0 {
+            warn!("future update event {frame:?} {last_frame:?} player {player:?}, saving for next frame");
             events_to_resend.push(event.clone());
             continue;
         }
 
-        let index = snapshot_info.index(frame);
-        let snapshot = &mut snapshot_info.snapshots[index];
-        if snapshot.frame == frame {
+        let index = index::<LEN>(frame.0);
+        if frames[index].0 == frame.0 {
             //insert this input
             match inputs.0[index].0.entry(player) {
                 Entry::Vacant(entry) => {
                     if !input.is_empty() {
-                        //println!("input of player {player:?} from frame {frame} got inserted {input:?}");
+                        //println!("input of player {player:?} from {frame:?} got inserted {input:?}");
                     }
-                    if let Some(ref server) = server {
-                        let endpoint = server.endpoint();
+                    if let Some(ref mut server) = server {
+                        let endpoint = server.endpoint_mut();
                         let mut clients = endpoint.clients();
                         clients.retain(|&x| x!=player.0);   //send to everyone except the Client that sent it
                         endpoint.try_send_group_message_on(
                             clients.iter(),
-                            bevy_quinnet::shared::channel::ChannelId::UnorderedReliable,
+                            1,  //UnorderedReliable
                             crate::networking::ServerMessage::Input(event.clone()),
                         );
                     }
                     entry.insert(input);
-                    snapshot.modified |= update;
+                    modified[index].0 |= update;
                 },
                 Entry::Occupied(mut entry) => {
                     if server.is_none() {
                         if *entry.get() != input {
-                            warn!("input of player {player:?} from frame {frame} got changed");
+                            warn!("input of player {player:?} from {frame:?} got changed");
                             entry.insert(input);
-                            snapshot.modified |= update;
+                            modified[index].0 |= update;
                         }
                     }else{
-                        warn!("input of player {player:?} from frame {frame} tried to change");
+                        warn!("input of player {player:?} from {frame:?} tried to change");
                     }
                 },
             }
         }else{
-            warn!("too old frame updated {frame} stored {} last {last} player {player:?}", snapshot.frame);
+            warn!("too old frame updated {frame:?} stored {:?} last {last_frame:?} player {player:?}", frames[index]);
         }
     }
 
     for event in events_to_resend {
-        input.send(event);
+        events.send(event);
     }
 }

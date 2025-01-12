@@ -13,11 +13,7 @@ pub struct GravityPlugin;
 impl Plugin for GravityPlugin {
     fn build(&self, app: &mut App) {
         app
-        .insert_resource(RapierConfiguration {
-            gravity: Vect::ZERO,
-            timestep_mode: TimestepMode::Fixed { dt: 0.001*PHYSICS_TIMESTEP_MS as f32, substeps: 1 },
-            ..RapierConfiguration::new(1.0)
-        })
+        .insert_resource(TimestepMode::Fixed { dt: 0.001*PHYSICS_TIMESTEP_MS as f32, substeps: 1 })
         .register_type::<AtractedByGravity>()
         .register_type::<CreatesGravity>()
         .register_type::<GravityVector>()
@@ -38,7 +34,7 @@ pub struct GravityVector(pub Vec3);
 pub fn gravity_system(
     mut affected: Query<(&RapierRigidBodyHandle,&mut ExternalForce,Option<&mut GravityVector>,&AtractedByGravity)>,
     sources: Query<(&RapierRigidBodyHandle,&CreatesGravity)>,
-    context: Res<RapierContext>,
+    context: ReadDefaultRapierContext,
 ) {
     let bodies = &context.bodies;
     for (h1,mut force1,vector,g1) in affected.iter_mut() {

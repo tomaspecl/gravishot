@@ -11,10 +11,9 @@ use crate::input::{UpdateInputEvent, LocalInput, Input, Inputs};
 use crate::player::Player;
 use crate::map::Map;
 use rollback::UpdateStateEvent;
-use rollback::{State, States, Snapshot, PhysicsBundle};
+use rollback::{State, States, Snapshot, PhysicsBundle, LEN, Rollback};
 
-use bevy_gravirollback::new::*;
-use bevy_gravirollback::new::systems::*;
+use bevy_gravirollback::prelude::*;
 
 use bevy::prelude::*;
 
@@ -26,9 +25,9 @@ pub enum ClientMessage {
     /// Client wants to connect
     Connect,
     /// Sent to the Server to inform of local player Input
-    Input(u64, Input),
+    Input(Frame, Input),
     /// Sent to the Server to correct the State of local player in specified frame
-    Correction(u64, State),
+    Correction(Frame, State),
 }
 
 /// Sent from Server to Clients
@@ -45,8 +44,8 @@ pub enum ServerMessage {
     Input(UpdateInputEvent),
     /// Sent to the Client when they are sending future Inputs.
     /// Contains the last Server frame
-    SlowDown(u64),
-    StateSummary(u64, Snapshot),
+    SlowDown(LastFrame),
+    StateSummary(Frame, Snapshot),
     MapUpdate(Map),
 }
 
@@ -94,13 +93,13 @@ impl Plugin for NetworkPlugin {
         .register_type::<RollbackID>()
         .register_type::<Inputs>()
         .register_type::<LocalInput>()
-        .register_type::<SnapshotInfo>()
+        .register_type::<Rollback<Frame>>()
+        .register_type::<Rollback<Modified>>()
         .register_type::<RollbackMap>()
         .register_type::<Rollback<Inputs>>()
         .register_type::<Rollback<PhysicsBundle>>()
         .register_type::<Rollback<crate::player::HeadData>>()
         .register_type::<crate::map::Map>()
-        //.register_type::<Snapshots::<MyState>>()
         .add_plugins((
             bevy_quinnet::client::QuinnetClientPlugin {
                 initialize_later: true,
@@ -108,20 +107,20 @@ impl Plugin for NetworkPlugin {
             bevy_quinnet::server::QuinnetServerPlugin {
                 initialize_later: true,
             },
-            bevy_gravirollback::new::RollbackPlugin::default(),
+            RollbackPlugin::<LEN>,
+            RollbackSchedulePlugin::<LEN>::default(),
+            ExistencePlugin::<LEN>,
         ))
-
-        //.insert_resource(RollbackRegistry {
-        //    getters: vec![getter::<Transform>, getter::<Velocity>],
-        //})
         
         //TODO: this is not really networking
-        .add_systems(RollbackSchedule,(
-            PhysicsBundle::get_default_rollback_systems(),
-            crate::player::Health::get_default_rollback_systems(),
-            crate::player::HeadData::get_default_rollback_systems(),
-            restore_resource::<Inputs>.in_set(RollbackSet::RestoreInputs),
-        ));
+        .add_systems(RollbackUpdate,restore_resource::<Inputs,LEN>.in_set(RollbackUpdateSet::LoadInputs))
+        .add_systems(RollbackSave,clear_resource_input_default::<Inputs,LEN>);
+        RollbackSystemConfigurator::<LEN>::default().add::<(
+            PhysicsBundle,
+            crate::player::Health,
+            crate::player::HeadData,
+        )>().apply(app);
+        
     }
 }
 

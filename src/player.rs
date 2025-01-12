@@ -8,9 +8,9 @@ pub mod gun;
 
 use crate::input::Inputs;
 use crate::gravity::{AtractedByGravity, GravityVector};
+use crate::networking::rollback::Rollback;
 
-use bevy_gravirollback::new::*;
-use bevy_gravirollback::new::for_user::*;
+use bevy_gravirollback::prelude::*;
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
@@ -154,7 +154,7 @@ pub fn spawn_player_system(
                     health: PLAYER_HEALTH,
                 };
         
-                commands.add(spawn3(make_player(spawn)));
+                commands.queue(spawn3(make_player(spawn)));
 
                 let spawn = gun::SpawnGun {
                     player: Some(player),
@@ -164,7 +164,7 @@ pub fn spawn_player_system(
                     index: None,
                 };
         
-                commands.add(spawn3(gun::make_gun(spawn)));
+                commands.queue(spawn3(gun::make_gun(spawn)));
             }else{
                 warn!("player {} already exists",player.0);
                 continue
@@ -206,14 +206,12 @@ pub fn make_player(event: SpawnPlayer) -> impl Fn(Option<Res<crate::networking::
         //TODO: cache mesh and material handles
         let mesh = mesh_assets.add(Capsule3d::new(radius, height-2.0*radius));
         let head_mesh = mesh_assets.add(Sphere::new(radius));
-        let material = material_assets.add(Color::rgb(0.8, 0.7, 0.6));
+        let material = material_assets.add(Color::srgb(0.8, 0.7, 0.6));
         
         let mut player = commands.spawn((
             player_id,
-            SpatialBundle {
-                transform,
-                ..default()
-            },
+            transform,
+            Visibility::Visible,
             RigidBody::Dynamic,
             (
                 physics_bundle,
@@ -221,15 +219,17 @@ pub fn make_player(event: SpawnPlayer) -> impl Fn(Option<Res<crate::networking::
                 exists,
                 Exists(true),
             ),
-            velocity,
-            ExternalForce::default(),
-            ExternalImpulse::default(),
-            Damping {
-                linear_damping: 0.0,
-                angular_damping: 1.0,
-            },
-            AtractedByGravity(0.1),
-            GravityVector(Vec3::ZERO),
+            (
+                velocity,
+                ExternalForce::default(),
+                ExternalImpulse::default(),
+                Damping {
+                    linear_damping: 0.0,
+                    angular_damping: 1.0,
+                },
+                AtractedByGravity(0.1),
+                GravityVector(Vec3::ZERO),
+            ),
             Standing(false),
             (health,
             health_rb,
@@ -249,10 +249,8 @@ pub fn make_player(event: SpawnPlayer) -> impl Fn(Option<Res<crate::networking::
 
             player.with_children(|parent| {
                 parent.spawn((
-                    Camera3dBundle {
-                        transform: *CAMERA_3RD_PERSON,
-                        ..default()
-                    },
+                    Camera3d::default(),
+                    *CAMERA_3RD_PERSON,
                     CameraType {
                         first_person: false,
                     },
@@ -266,12 +264,11 @@ pub fn make_player(event: SpawnPlayer) -> impl Fn(Option<Res<crate::networking::
         };
 
         player.with_children(|parent| {
-            parent.spawn(PbrBundle {
-                mesh,
-                material: material.clone(),
-                transform: Transform::from_xyz(0.0, 0.0, 0.0),
-                ..default()
-            });
+            parent.spawn((
+                Transform::from_xyz(0.0, 0.0, 0.0),
+                Mesh3d(mesh),
+                MeshMaterial3d(material.clone()),
+            ));
 
             //TODO: have multiple cameras and switch between them
             //player head, move to head.rs ?
@@ -280,23 +277,18 @@ pub fn make_player(event: SpawnPlayer) -> impl Fn(Option<Res<crate::networking::
                 Name::new("Player Head"),
                 DamageCoeficient(5.0),  //TODO: head damage does not work without a Collider
                 player_id,
-                PbrBundle {
-                    mesh: head_mesh,
-                    material,
-                    transform: Transform::from_xyz(0.0, height, 0.0),
-                    ..default()
-                },
+                Transform::from_xyz(0.0, height, 0.0),
+                Mesh3d(head_mesh),
+                MeshMaterial3d(material),
             ));
             parts.head = head.id();
             if is_local {
                 head.with_children(|parent| {
                     parent.spawn((
-                        Camera3dBundle {
-                            transform: *CAMERA_1ST_PERSON,
-                            camera: Camera {
-                                is_active: false,
-                                ..default()
-                            },
+                        Camera3d::default(),
+                        *CAMERA_1ST_PERSON,
+                        Camera {
+                            is_active: false,
                             ..default()
                         },
                         CameraType {
@@ -361,7 +353,7 @@ pub fn despawn_player(player_to_despawn: Player) -> impl Fn(&mut World) {
         //or just put RollbackID onto the gun
         let entities = world.query_filtered::<(Entity, &Player), With<Body>>().iter(world).filter_map(|(entity,&player)| if player==player_to_despawn {Some(entity)}else{None}).collect::<Vec<_>>();
         for e in entities {
-            world.get_entity_mut(e).map(|e| e.despawn_recursive()); //TODO: maybe instead set Exists to false
+            let _ = world.get_entity_mut(e).map(|e| e.despawn_recursive()); //TODO: maybe instead set Exists to false
         }
     }
 }

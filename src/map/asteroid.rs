@@ -7,6 +7,7 @@ use crate::gravity::{AtractedByGravity, CreatesGravity};
 use super::AsteroidInstance;
 
 use bevy::prelude::*;
+use bevy::color::palettes::css::*;
 use bevy_rapier3d::prelude::*;
 
 use bevy::gltf::{Gltf, GltfMesh, GltfPrimitive};
@@ -48,17 +49,14 @@ pub fn spawn_asteroid(
         collider,
         CreatesGravity(1.0),
         AtractedByGravity(asteroid.atracted_by_gravity),
-        SpatialBundle {
-            transform,
-            ..default()
-        },
+        transform,
+        Visibility::Visible,
     ))
     .with_children(|p|{
-        p.spawn(PbrBundle {
-            mesh,
-            material,
-            ..default()
-        });
+        p.spawn((
+            Mesh3d(mesh),
+            MeshMaterial3d(material)
+        ));
     });
 
     /*let scene = server.load("asteroid test.gltf#Scene0");
@@ -151,7 +149,7 @@ pub fn wait_for_load(
                 commands.remove_resource::<AssetsLoading>();
 
                 let default_material = new_mat.add(StandardMaterial {
-                    base_color: Color::GRAY,
+                    base_color: GRAY.into(),
                     perceptual_roughness: 0.4,
                     ..default()
                 });
@@ -185,7 +183,15 @@ pub fn wait_for_load(
 
                 for mesh in gltf.meshes.iter() {
                     let mesh = a_gmesh.get(mesh).unwrap();
-                    for GltfPrimitive {mesh,material, extras: _, material_extras: _} in &mesh.primitives {
+                    for GltfPrimitive {
+                        mesh,
+                        material,
+                        extras: _,
+                        material_extras: _,
+                        index: _,
+                        parent_mesh_index: _,
+                        name: _,
+                    } in &mesh.primitives {
                         println!("loading asteroid");
                         let mesh_handle = mesh.clone();
                         let mesh = a_mesh.get(&mesh_handle).unwrap();
@@ -206,7 +212,7 @@ pub fn wait_for_load(
 
                 next_state.set(crate::gamestate::GameState::LoadingDone);
             },
-            LoadState::Failed => panic!("Could not load asteroid assets"),
+            LoadState::Failed(e) => panic!("Could not load asteroid assets: {e}"),
             _ => ()
         }
     }

@@ -24,14 +24,14 @@ pub fn ui(
         ui.text_edit_singleline(&mut net.ip_port);
 
         if ui.button("join server").clicked() {
-            commands.init_resource::<bevy_quinnet::client::Client>();
+            commands.init_resource::<bevy_quinnet::client::QuinnetClient>();
             commands.insert_resource(ClientMarker);
             state.set(GameState::ClientSetup);
         }
         if ui.button("start server").clicked() {
             let player = Player(0);
             commands.insert_resource(LocalPlayer(player));
-            commands.init_resource::<bevy_quinnet::server::Server>();
+            commands.init_resource::<bevy_quinnet::server::QuinnetServer>();
             commands.insert_resource(ServerMarker);
             state.set(GameState::ServerSetup);
         }
